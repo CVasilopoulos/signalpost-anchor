@@ -94,8 +94,7 @@ def apply_refresh(envelope: dict[str, Any], previous: dict[str, Any] | None) -> 
             "content_fingerprint": fingerprint(claims),
         }
         return envelope
-    previous_claims = {claim["key"]: claim for claim in previous.get("claims", []) if not claim.get("stale")}
-    stale_previous = {claim["key"]: claim for claim in previous.get("claims", []) if claim.get("stale")}
+    previous_claims = {claim["key"]: claim for claim in previous.get("claims", [])}
     previous_evidence = {item["id"]: item for item in previous.get("evidence", [])}
     current_keys = {claim["key"]: claim for claim in claims}
     sections = envelope.get("sections", {})
@@ -109,7 +108,7 @@ def apply_refresh(envelope: dict[str, Any], previous: dict[str, Any] | None) -> 
         return [previous_evidence[eid] for eid in claim.get("evidence_ids", []) if eid in previous_evidence]
 
     for key, claim in current_keys.items():
-        old = previous_claims.get(key) or stale_previous.get(key)
+        old = previous_claims.get(key)
         if old is None:
             prior_section = previous.get("sections", {}).get(claim["section"], {}).get("state")
             added += 1
@@ -121,16 +120,30 @@ def apply_refresh(envelope: dict[str, Any], previous: dict[str, Any] | None) -> 
             claim["first_observed_at"] = old.get("first_observed_at") or claim["first_observed_at"]
             unchanged += 1
             continue
+        if old.get("stale"):
+            old = {key: value for key, value in old.items() if key not in ("stale", "stale_reason", "carried_forward_from_run")}
         changed += 1
         kind = _change_type(claim["field"], "changed")
         change = _change(kind, claim, old, keep_evidence(old), now, previous_run)
         changes.append(change)
         history.append({"superseded_at": now, "superseded_by_claim": claim["id"], "claim": old, "evidence": keep_evidence(old)})
+    checked_sources = set(envelope.get("sources_checked") or [])
+    fetched_urls = {item.get("final_url") for item in envelope.get("source_snapshots", [])} | {item.get("requested_url") for item in envelope.get("source_snapshots", [])}
+
+    def source_rechecked(old: dict[str, Any]) -> bool:
+        source_id = old.get("source_id") or "unknown"
+        if source_id not in checked_sources:
+            return False
+        if source_id == "website":
+            urls = {previous_evidence[eid].get("source_url") for eid in old.get("evidence_ids", []) if eid in previous_evidence}
+            return bool(urls & fetched_urls)
+        return True
+
     for key, old in previous_claims.items():
         if key in current_keys:
             continue
         state = sections.get(old["section"], {}).get("state")
-        if state in RELIABLE_REMOVAL_STATES:
+        if state in RELIABLE_REMOVAL_STATES and source_rechecked(old):
             removed += 1
             kind = _change_type(old["field"], "removed")
             changes.append(_change(kind, old, old, keep_evidence(old), now, previous_run, removed_claim=True))
@@ -139,8 +152,8 @@ def apply_refresh(envelope: dict[str, Any], previous: dict[str, Any] | None) -> 
             carried += 1
             stale = dict(old)
             stale["stale"] = True
-            stale["carried_forward_from_run"] = previous_run.get("run_id")
-            stale["stale_reason"] = f"source not refreshed in this run (section state: {state or 'unknown'})"
+            stale.setdefault("carried_forward_from_run", previous_run.get("run_id"))
+            stale["stale_reason"] = f"source {old.get('source_id') or 'unknown'} not re-checked in this run (section state: {state or 'unknown'})"
             claims.append(stale)
             for item in keep_evidence(old):
                 if item["id"] not in evidence_index:

@@ -195,5 +195,9 @@ def apply_external(ctx: CompanyContext, external: dict[str, Any]) -> None:
         if lei.get("registration_status"):
             ledger.claim("external_identifiers", "identifier.lei_status", lei["registration_status"], [evidence_id], label="LEI registration status", as_of=lei.get("last_update"), extra={"next_renewal": lei.get("next_renewal")})
         sources.append(GLEIF_SOURCE)
+    if not external.get("wikidata_failed"):
+        ledger.checked("wikidata")
+    if not external.get("gleif_failed"):
+        ledger.checked("gleif")
     checked = ["Enhetsregisteret"] + ([WIKIDATA_SOURCE] if not external.get("wikidata_failed") else []) + ([GLEIF_SOURCE] if not external.get("gleif_failed") else [])
     ledger.section("external_identifiers", "available", None, sources=checked)

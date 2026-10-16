@@ -47,6 +47,7 @@ class NavJobIndex:
         self.error: str | None = None
         self.completed_at: str | None = None
         self.newest_change: str | None = None
+        self.attached = False
 
     async def _token(self) -> str | None:
         configured = os.environ.get("NAV_FEED_TOKEN", "").strip()
@@ -224,6 +225,7 @@ async def attach_jobs(index: NavJobIndex, contexts: list[CompanyContext], stop_a
         publish_job(ctx, fetched, body, ad, employer, orgnr)
 
     await asyncio.gather(*(verify(ctx, entry) for ctx, entry in work))
+    index.attached = stats["errors"] == 0
     return stats
 
 
@@ -273,6 +275,8 @@ def publish_job(ctx: CompanyContext, fetched: Fetched, body: dict[str, Any], ad:
 
 def finalise_hiring(ctx: CompanyContext, index: NavJobIndex | None) -> None:
     ledger = ctx.ledger
+    if index is not None and index.state == "complete" and getattr(index, "attached", False):
+        ledger.checked("nav")
     nav_jobs = [claim for claim in ledger.claims if claim["field"] == "hiring.job_posting" and claim.get("source_system") == "NAV arbeidsplassen"]
     site_jobs = [claim for claim in ledger.claims if claim["field"] == "hiring.job_posting" and claim.get("source_system") == "company_website"]
     if nav_jobs:

@@ -43,6 +43,28 @@ LICENCES = {
 }
 
 
+def source_id_for_url(url: str) -> str:
+    if "data.brreg.no/enhetsregisteret/api/enheter/" in url:
+        return "brreg_roles" if url.rstrip("/").endswith("/roller") else "brreg_entity"
+    if "data.brreg.no/enhetsregisteret/api/underenheter" in url:
+        return "brreg_subunits"
+    if "data.brreg.no/enhetsregisteret/api/oppdateringer" in url:
+        return "brreg_updates"
+    if "data.brreg.no/enhetsregisteret/api/konsernstruktur" in url:
+        return "brreg_group"
+    if "regnskapsregisteret/regnskap/aarsregnskap/kopi" in url:
+        return "brreg_filed_copy"
+    if "regnskapsregisteret/regnskap" in url:
+        return "brreg_accounts"
+    if "pam-stilling-feed.nav.no" in url:
+        return "nav"
+    if "query.wikidata.org" in url or "wikidata.org" in url:
+        return "wikidata"
+    if "gleif.org" in url:
+        return "gleif"
+    return "website"
+
+
 def canonical(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
 
@@ -62,6 +84,19 @@ class Ledger:
         self.sections: dict[str, dict[str, Any]] = {}
         self.errors: list[dict[str, Any]] = []
         self.notes: dict[str, Any] = {}
+        self.checked_sources: set[str] = set()
+
+    def checked(self, source_id: str) -> None:
+        self.checked_sources.add(source_id)
+
+    def source_id_of(self, evidence_ids: list[str]) -> str:
+        for evidence_id in evidence_ids:
+            item = self.evidence.get(evidence_id)
+            if not item:
+                continue
+            snapshot = self.snapshots.get(item["snapshot_id"], {})
+            return source_id_for_url(snapshot.get("requested_url") or item.get("source_url") or "")
+        return "unknown"
 
     def snapshot(self, fetched: Fetched, source_name: str, source_class: str, licence_key: str) -> str:
         snapshot_id = "s-" + short_hash(fetched.final_url, fetched.sha256)
@@ -150,6 +185,7 @@ class Ledger:
             "confidence": round(confidence, 3),
             "method": method,
             "evidence_ids": list(dict.fromkeys(evidence_ids)),
+            "source_id": self.source_id_of(evidence_ids),
         }
         if unit:
             record["unit"] = unit

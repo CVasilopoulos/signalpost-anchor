@@ -104,6 +104,7 @@ def build_envelope(ctx: CompanyContext, run: dict[str, Any], synthesis: dict[str
         "synthesis": synthesis,
         "unknowns": unknowns,
         "website_research": {"candidates": ctx.website_candidates},
+        "sources_checked": sorted(ledger.checked_sources),
         "changes": [],
         "history": [],
         "refresh": {},

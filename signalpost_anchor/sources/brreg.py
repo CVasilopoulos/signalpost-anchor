@@ -194,6 +194,9 @@ async def fetch_entity(fetcher: Fetcher, ctx: CompanyContext) -> None:
         return
     body = fetched.json()
     ctx.entity = body
+    ledger.checked("brreg_entity")
+    if not body.get("erIKonsern"):
+        ledger.checked("brreg_group")
     if body.get("respons_klasse") == "SlettetEnhet" or body.get("slettedato"):
         ctx.entity_status = "deleted"
     elif body.get("konkurs"):
@@ -295,6 +298,7 @@ async def fetch_roles(fetcher: Fetcher, ctx: CompanyContext) -> None:
     url = f"{API}/enheter/{ctx.organisation_number}/roller"
     fetched = await fetcher.get(url, headers={"Accept": "application/json"})
     if fetched.status in (404, 410):
+        ledger.checked("brreg_roles")
         ledger.section("leadership", "not_available", "No public roles returned by Enhetsregisteret", sources=[ROLES_SOURCE], checked_at=fetched.retrieved_at)
         return
     if not fetched.ok:
@@ -302,6 +306,7 @@ async def fetch_roles(fetcher: Fetcher, ctx: CompanyContext) -> None:
         ledger.error("brreg_roles", url, fetched.error or f"HTTP {fetched.status}")
         return
     body = fetched.json()
+    ledger.checked("brreg_roles")
     count = 0
     for group_index, group in enumerate(body.get("rollegrupper") or []):
         group_label = _get(group, "type", "beskrivelse")
@@ -350,6 +355,7 @@ async def fetch_subunits(fetcher: Fetcher, ctx: CompanyContext, max_units: int =
                 ledger.error("brreg_subunits", url, fetched.error or f"HTTP {fetched.status}")
             return
         body = fetched.json()
+        ledger.checked("brreg_subunits")
         units = _get(body, "_embedded", "underenheter") or []
         for index, unit in enumerate(units):
             if total >= max_units:
@@ -394,6 +400,7 @@ async def fetch_accounts(fetcher: Fetcher, ctx: CompanyContext) -> None:
     url = f"{ACCOUNTS_API}/{ctx.organisation_number}"
     fetched = await fetcher.get(url, headers={"Accept": "application/json"})
     if fetched.status in (404, 204):
+        ledger.checked("brreg_accounts")
         state = "not_applicable" if ctx.legal_form in {"ENK", "ESEK", "BRL", "FLI", "ANS", "DA"} and not ledger.first_value("financials.latest_submitted_year") else "not_available"
         ledger.section("annual_accounts", state, "Regnskapsregisteret returned no normalised accounts (404) – not treated as zero", sources=[ACCOUNTS_SOURCE], checked_at=fetched.retrieved_at)
         return
@@ -406,6 +413,7 @@ async def fetch_accounts(fetcher: Fetcher, ctx: CompanyContext) -> None:
     except ValueError:
         ledger.section("annual_accounts", "failed", "Regnskapsregisteret returned non-JSON body", sources=[ACCOUNTS_SOURCE])
         return
+    ledger.checked("brreg_accounts")
     records = body if isinstance(body, list) else [body]
     records = [record for record in records if isinstance(record, dict)]
     records.sort(key=lambda record: (_period(record)["to"] or "", record.get("regnskapstype") or ""), reverse=True)
@@ -469,6 +477,7 @@ async def fetch_updates(fetcher: Fetcher, ctx: CompanyContext, since_years: int 
             ledger.error("brreg_updates", url, fetched.error or f"HTTP {fetched.status}")
             break
         body = fetched.json()
+        ctx.ledger.checked("brreg_updates")
         items = _get(body, "_embedded", "oppdaterteEnheter") or []
         events.extend((fetched, index, item) for index, item in enumerate(items))
         pages = _get(body, "page", "totalPages") or 1
@@ -585,6 +594,7 @@ class FilingYearsWorker:
         except (ValueError, TypeError):
             return
         self.done += 1
+        ctx.ledger.checked("brreg_filed_copy")
         if not years:
             return
         ledger = ctx.ledger
@@ -625,10 +635,13 @@ async def fetch_group(fetcher: Fetcher, ctx: CompanyContext, max_subsidiaries: i
     ledger = ctx.ledger
     url = f"{API}/konsernstruktur/{ctx.organisation_number}"
     fetched = await fetcher.get(url, headers={"Accept": "application/json"})
-    if fetched.status in (404, 410, 204) or not fetched.ok:
-        if not fetched.ok and fetched.status not in (404, 410, 204):
-            ledger.error("brreg_group", url, fetched.error or f"HTTP {fetched.status}")
+    if fetched.status in (404, 410, 204):
+        ledger.checked("brreg_group")
         return
+    if not fetched.ok:
+        ledger.error("brreg_group", url, fetched.error or f"HTTP {fetched.status}")
+        return
+    ledger.checked("brreg_group")
     try:
         root = fetched.json()
     except ValueError:

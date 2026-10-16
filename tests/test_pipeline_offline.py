@@ -216,7 +216,7 @@ def test_refresh_reports_material_changes_and_keeps_prior_evidence(tmp_path):
     assert "Since the previous run" in json.dumps(envelope["synthesis"])
 
 
-def test_failed_source_keeps_last_supported_value_as_stale(tmp_path):
+def test_failed_source_keeps_last_supported_value_as_stale_until_it_recovers(tmp_path):
     out = tmp_path / "out"
     run_world(tmp_path, {}, [ORG], out)
     batch = tmp_path / "batch.jsonl"
@@ -237,6 +237,13 @@ def test_failed_source_keeps_last_supported_value_as_stale(tmp_path):
     stale = [c for c in envelope["claims"] if c.get("stale")]
     assert any(c["field"] == "leadership.ceo" for c in stale)
     assert not any(c["type"] == "removed_role" for c in envelope["changes"])
+    (out / "envelopes.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in envelopes), encoding="utf-8")
+    again, _ = asyncio.run(run_batch(options, fetcher_factory=factory))
+    still = [c for c in by_org(again)[ORG]["claims"] if c.get("stale") and c["field"] == "leadership.ceo"]
+    assert still and still[0]["carried_forward_from_run"] == envelope["refresh"]["previous_run_id"]
+    recovered, _ = run_world(tmp_path, {}, [ORG], out)
+    assert not any(c.get("stale") for c in by_org(recovered)[ORG]["claims"])
+    assert not by_org(recovered)[ORG]["changes"]
 
 
 def test_group_structure_is_labelled_parent_and_subsidiary(tmp_path):

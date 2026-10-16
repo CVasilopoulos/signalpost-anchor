@@ -361,6 +361,7 @@ class WebsiteResearcher:
         proof_ev = ledger.evidence_for(proof_page.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="text", span=assessment.get("span"), method=assessment["method"])
         verification = {"method": assessment["method"], "candidate_source": candidate["source"], "signals": assessment["signals"], "proof_url": proof_page.fetched.final_url}
         ctx.website = {"url": site_root, "domain": domain, "verification": verification}
+        ledger.checked("website")
         ledger.claim("website", "website.official_url", site_root, [proof_ev], label="Verified official website", method=assessment["method"], confidence=0.99 if assessment["method"] == "organisation_number_on_site" else 0.93, extra={"verification": verification})
         extra_pages = await self._extra_pages(ctx, home, pages, deadline)
         pages = pages + extra_pages
