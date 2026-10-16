@@ -80,7 +80,23 @@ How identities are proven: [docs/IDENTITY_RESOLUTION.md](docs/IDENTITY_RESOLUTIO
 
 ## 100-company smoke test
 
-See [reports/SMOKE_TEST.md](reports/SMOKE_TEST.md) for the batch, the command, coverage, claim counts, runtime and cost. The batch (`reports/smoke-100-companies.jsonl`) mixes size bands and legal forms from the public universe with bankrupt, liquidating, deleted and sole-proprietorship entities from the live register.
+Run from a clean clone at commit `7a3666d` in a fresh `python:3.12-slim` container (6 CPUs, 6 GB), only `pip install -r requirements.txt` before the run command:
+
+| Result | Value |
+|---|---|
+| Envelopes | 100 / 100, all terminal, validation passed |
+| Claims | 11,705 (117 per company), every one with source URL, retrieval time, SHA-256, locator and excerpt |
+| Companies with accounts / roles / workplaces / registry activity | 96 / 96 / 90 / 97 |
+| Verified official website | 27 (12 by organisation number on the site) |
+| Company-owned profiles / contact details / LEI | 19 / 67 / 13 |
+| Wall-clock runtime | 87 s (p50 2.5 s, p95 17.9 s per company) |
+| Requests | 1,391 |
+| Third-party cost / model calls | USD 0 / 0 |
+| Refresh re-run on the same output | 0 change records (idempotent), 85 s |
+
+Full report with the per-company table: [reports/SMOKE_TEST.md](reports/SMOKE_TEST.md); machine-readable reports: `reports/smoke-run-report.json`, `reports/smoke-refresh-run-report.json`; the envelopes themselves: `reports/smoke-envelopes.jsonl.gz`. The batch (`reports/smoke-100-companies.jsonl`) mixes size bands and legal forms from the public universe with bankrupt, liquidating, deleted and sole-proprietorship entities from the live register.
+
+A 1,000-company random sample from the public universe completed in 899 s with 1,000/1,000 envelopes and 105,072 claims (an earlier build that let the provider-rate-limited filed-copy lookup run for its full 900 s; the current build stops that lookup 60 s after company research ends).
 
 ## Tests
 

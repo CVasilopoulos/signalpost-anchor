@@ -86,7 +86,7 @@ def main() -> None:
         "|---|---|",
         f"| Claims published | {report['claims']['total']} (mean {report['claims']['per_company_mean']} per company) |",
         f"| Website verification methods | {', '.join(f'{key}: {value}' for key, value in report['website_verification_methods'].items())} |",
-        f"| HTTP requests | {ops['requests']} ({ops['bytes_received'] / 1e6:.1f} MB) |",
+        f"| HTTP requests | {ops['requests']} ({ops['bytes_received'] / 1e6:.1f} MB after decompression; the NAV feed is served gzip-compressed) |",
         f"| Wall-clock runtime | {ops['runtime_s']} s |",
         f"| Per-company research time p50 / p95 | {ops['company_runtime_p50_ms'] / 1000:.1f} s / {ops['company_runtime_p95_ms'] / 1000:.1f} s |",
         f"| NAV feed | {report['jobs_feed']['pages_read']} pages, {report['jobs_feed']['active_ads_indexed']} active ads indexed, {report['jobs_feed'].get('verified', 0)} ads verified by employer number |",
