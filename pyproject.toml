@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "signalpost-anchor"
+version = "1.0.0"
+description = "Organisation-number-anchored research agent for Norwegian companies with claim-level evidence"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+  "httpx==0.28.1",
+  "beautifulsoup4==4.13.4",
+  "lxml==6.0.2",
+]
+
+[project.optional-dependencies]
+test = ["pytest==8.4.2"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools]
+packages = ["signalpost_anchor", "signalpost_anchor.sources"]
+
+[tool.setuptools.package-data]
+signalpost_anchor = ["static/*"]

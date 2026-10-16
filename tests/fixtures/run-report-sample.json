@@ -1,0 +1,297 @@
+{
+  "report_version": "signalpost-anchor-run-report/1.0",
+  "agent": {
+    "name": "Signalpost Anchor",
+    "version": "1.0.0"
+  },
+  "run": {
+    "run_id": "run-20261016T082125",
+    "started_at": "2026-10-16T08:21:25.649Z",
+    "completed_at": "2026-10-16T08:21:35.150Z",
+    "terminal_status": "completed",
+    "agent": "Signalpost Anchor",
+    "agent_version": "1.0.0",
+    "evidence_cutoff": "2026-10-16T08:21:35.150Z"
+  },
+  "environment": {
+    "python": "3.12.5",
+    "platform": "macOS-27.0.1-arm64-arm-64bit",
+    "cpu_count": 8
+  },
+  "options": {
+    "time_budget_s": 3000.0,
+    "company_budget_s": 75.0,
+    "concurrency": 24,
+    "web": true,
+    "guess_domains": true,
+    "jobs": true,
+    "external": true,
+    "nav_lookback_days": 3,
+    "previous_envelopes": null
+  },
+  "input": {
+    "records": 8,
+    "unique": 8,
+    "duplicates_ignored": [],
+    "invalid_organisation_numbers": [
+      "123"
+    ]
+  },
+  "validation": {
+    "expected_envelopes": 8,
+    "emitted_envelopes": 8,
+    "exact_expected_count": true,
+    "unique_organisation_numbers": true,
+    "all_terminal": true,
+    "all_sections_have_valid_state": true,
+    "all_claims_have_evidence": true,
+    "all_evidence_has_source_time_hash": true,
+    "passed": true
+  },
+  "envelope_states": {
+    "available": 7,
+    "failed": 1
+  },
+  "section_states": {
+    "legal_identity": {
+      "available": 7,
+      "failed": 1
+    },
+    "annual_accounts": {
+      "available": 6,
+      "not_applicable": 1,
+      "failed": 1
+    },
+    "leadership": {
+      "available": 6,
+      "not_available": 1,
+      "failed": 1
+    },
+    "workplaces": {
+      "available": 6,
+      "not_available": 1,
+      "failed": 1
+    },
+    "website": {
+      "available": 4,
+      "ambiguous": 1,
+      "not_available": 2,
+      "failed": 1
+    },
+    "company_profiles": {
+      "available": 3,
+      "not_available": 4,
+      "failed": 1
+    },
+    "hiring": {
+      "available": 2,
+      "not_available": 5,
+      "failed": 1
+    },
+    "public_activity": {
+      "available": 7,
+      "failed": 1
+    },
+    "contact": {
+      "available": 6,
+      "not_available": 1,
+      "failed": 1
+    },
+    "external_identifiers": {
+      "available": 7,
+      "failed": 1
+    }
+  },
+  "coverage_companies": {
+    "official_identity": 7,
+    "annual_accounts": 6,
+    "leadership": 6,
+    "registered_workplaces": 6,
+    "verified_website": 4,
+    "company_profiles": 3,
+    "hiring_any": 2,
+    "job_postings": 0,
+    "website_news": 2,
+    "registry_activity": 7,
+    "contact": 6,
+    "lei": 1,
+    "wikidata": 1,
+    "public_brand": 3
+  },
+  "coverage_share": {
+    "official_identity": 0.875,
+    "annual_accounts": 0.75,
+    "leadership": 0.75,
+    "registered_workplaces": 0.75,
+    "verified_website": 0.5,
+    "company_profiles": 0.375,
+    "hiring_any": 0.25,
+    "job_postings": 0.0,
+    "website_news": 0.25,
+    "registry_activity": 0.875,
+    "contact": 0.75,
+    "lei": 0.125,
+    "wikidata": 0.125,
+    "public_brand": 0.375
+  },
+  "claims": {
+    "total": 927,
+    "per_company_mean": 115.9,
+    "by_field": {
+      "activity.registry_employee_count": 35,
+      "location.registered_workplace": 34,
+      "activity.role_group_changed": 21,
+      "financials.revenue": 21,
+      "financials.operating_expenses": 21,
+      "financials.wage_costs": 21,
+      "financials.operating_result": 21,
+      "financials.net_financial_items": 21,
+      "financials.annual_result": 21,
+      "financials.total_assets": 21,
+      "financials.fixed_assets": 21,
+      "financials.current_assets": 21,
+      "financials.equity": 21,
+      "financials.paid_in_equity": 21,
+      "financials.total_liabilities": 21,
+      "financials.current_liabilities": 21,
+      "financials.audited": 21,
+      "financials.accounting_rules": 21,
+      "financials.statement_format": 21,
+      "financials.profit_before_tax": 20,
+      "financials.retained_earnings": 19,
+      "financials.sales_revenue": 18,
+      "financials.tax_expense": 18,
+      "financials.parent_company_filer": 18,
+      "financials.financial_income": 17,
+      "financials.financial_expenses": 17,
+      "financials.cash_and_bank": 17,
+      "financials.receivables": 17,
+      "activity.website_news": 16,
+      "leadership.board_member": 15,
+      "financials.total_comprehensive_result": 15,
+      "financials.long_term_liabilities": 12,
+      "identity.former_name": 11,
+      "financials.inventory": 10,
+      "identity.organisation_number": 7,
+      "identity.legal_name": 7,
+      "identity.legal_form": 7,
+      "identity.status": 7,
+      "identifier.brreg_public_page": 7,
+      "contact.website_phone": 7,
+      "identity.registered_date": 6,
+      "identity.business_register_date": 6,
+      "identity.founded_date": 6,
+      "identity.articles_date": 6,
+      "identity.vat_registered": 6,
+      "identity.in_business_register": 6,
+      "identity.in_foundation_register": 6,
+      "identity.in_voluntary_register": 6,
+      "identity.part_of_group": 6,
+      "identity.industry": 6,
+      "identity.institutional_sector": 6,
+      "identity.statutory_purpose": 6,
+      "identity.registered_activity": 6,
+      "identity.language_form": 6,
+      "financials.latest_submitted_year": 6,
+      "location.business_address": 6,
+      "location.municipality": 6,
+      "contact.registry_email": 6,
+      "leadership.board_chair": 6,
+      "leadership.board_deputy_member": 6,
+      "leadership.auditor": 6,
+      "financials.goodwill": 6,
+      "activity.registry_accounts_filed": 6,
+      "identity.vat_registered_date": 5,
+      "identity.employees": 5,
+      "identity.share_capital": 5,
+      "identity.number_of_shares": 5,
+      "leadership.ceo": 5,
+      "contact.registry_phone": 5,
+      "website.official_url": 4,
+      "website.description": 4,
+      "website.title": 4,
+      "contact.postal_address": 3,
+      "identity.public_brand": 3,
+      "website.language": 3,
+      "profile.facebook": 3,
+      "contact.website_email": 3,
+      "leadership.accountant": 3,
+      "activity.registry_articles_updated": 2,
+      "hiring.career_page": 2,
+      "website.registry_listed": 2,
+      "profile.instagram": 2,
+      "identifier.lei": 1,
+      "identifier.lei_status": 1,
+      "profile.linkedin": 1,
+      "website.logo": 1,
+      "activity.registry_address_change": 1,
+      "activity.registry_postal_address_change": 1,
+      "hiring.recruitment_portal": 1,
+      "leadership.business_manager": 1,
+      "identifier.wikidata": 1,
+      "identity.inception_wikidata": 1,
+      "identity.deleted_date": 1,
+      "activity.registry_name_change": 1,
+      "activity.registry_event": 1
+    }
+  },
+  "website_verification_methods": {
+    "subunit_registry_listed_and_name_match": 1,
+    "registry_listed_and_name_match": 1,
+    "organisation_number_on_site": 1,
+    "registry_email_domain_and_name_match": 1
+  },
+  "changes": {
+    "total": 0,
+    "by_type": {},
+    "companies_with_previous": 0
+  },
+  "jobs_feed": {
+    "enabled": true,
+    "state": "complete",
+    "token_source": "NAV published public token (api/publicToken)",
+    "pages_read": 9,
+    "ads_indexed": 3424,
+    "active_ads_indexed": 2056,
+    "error": null,
+    "candidates": 0,
+    "verified": 0,
+    "rejected_orgnr_mismatch": 0,
+    "inactive": 0,
+    "errors": 0,
+    "second_pass_companies": 0,
+    "second_pass_verified": 0
+  },
+  "external_lookups": {
+    "wikidata_matches": 1,
+    "gleif_matches": 1,
+    "errors": []
+  },
+  "operations": {
+    "requests": 96,
+    "bytes_received": 8175173,
+    "request_p50_ms": 342,
+    "request_p95_ms": 1100,
+    "top_hosts": {
+      "data.brreg.no": 35,
+      "www.vktv.no": 14,
+      "pam-stilling-feed.nav.no": 10,
+      "www.thune.no": 9,
+      "consto.no": 7,
+      "www.bring.com": 6,
+      "www.worksystem.no": 5,
+      "www.usbl.no": 2,
+      "bring.com": 2,
+      "www.consto.no": 2,
+      "vktv.no": 2,
+      "api.gleif.org": 1
+    },
+    "transport_errors": {},
+    "runtime_s": 9.5,
+    "company_runtime_p50_ms": 3542.3010420054197,
+    "company_runtime_p95_ms": 8914.612208958715,
+    "third_party_cost_usd": 0.0,
+    "llm_calls": 0,
+    "paid_apis": []
+  }
+}

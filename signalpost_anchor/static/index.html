@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' file:; style-src 'self' file:; img-src 'self' data: file:; connect-src 'none'; font-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>{{TITLE}}</title>
+<link rel="icon" type="image/svg+xml" href="assets/icon.svg?v={{VERSION}}">
+<link rel="stylesheet" href="assets/app.css?v={{VERSION}}">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#/" aria-label="Signalpost Anchor, all companies">
+      <span class="brand-mark" aria-hidden="true">S</span>
+      <span class="brand-text"><span class="brand-name">Signalpost Anchor</span><span class="brand-sub">Norwegian company research</span></span>
+    </a>
+    <form class="search" role="search" id="search-form">
+      <label class="sr-only" for="q">Search companies</label>
+      <input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="Name, brand, org. no., industry, municipality">
+    </form>
+    <nav class="topnav" aria-label="Main">
+      <a href="#/" id="nav-list">Companies</a>
+      <a href="#/compare/" id="nav-compare">Compare <span class="count" id="compare-count">0</span></a>
+    </nav>
+  </div>
+</header>
+<main id="main" tabindex="-1">
+  <noscript><p class="notice">This research viewer needs JavaScript. The raw data is in the data/ folder next to this page.</p></noscript>
+  <p class="notice" id="boot">Loading research data…</p>
+</main>
+<div class="tray" id="tray" hidden></div>
+<footer class="footer" id="footer"></footer>
+<dialog id="verify" aria-labelledby="verify-title"></dialog>
+<div class="sr-only" aria-live="polite" id="live"></div>
+<script src="data/index.js?v={{VERSION}}"></script>
+<script src="assets/app.js?v={{VERSION}}"></script>
+</body>
+</html>
