@@ -33,7 +33,7 @@ def world(state: dict):
                 "epostadresse": "firmapost@consto.no", "antallAnsatte": state.get("employees", 510), "harRegistrertAntallAnsatte": True,
                 "forretningsadresse": {"adresse": ["Sjølundvegen 2"], "postnummer": "9016", "poststed": "TROMSØ", "kommune": "TROMSØ", "land": "Norge"},
                 "naeringskode1": {"kode": "41.000", "beskrivelse": "Oppføring av bygninger"}, "registreringsdatoEnhetsregisteret": "2010-08-25",
-                "konkurs": False, "underAvvikling": False, "sisteInnsendteAarsregnskap": "2025", "aktivitet": ["Entreprenørvirksomhet"],
+                "konkurs": False, "underAvvikling": False, "sisteInnsendteAarsregnskap": "2025", "aktivitet": ["Entreprenørvirksomhet"], "erIKonsern": True,
             }
         if org == OTHER:
             return {"organisasjonsnummer": OTHER, "navn": "TOMT HOLDING AS", "organisasjonsform": {"kode": "AS", "beskrivelse": "Aksjeselskap"}, "harRegistrertAntallAnsatte": False, "konkurs": True}
@@ -52,6 +52,10 @@ def world(state: dict):
                     {"type": {"kode": "DAGL", "beskrivelse": "Daglig leder"}, "sistEndret": "2023-06-03", "roller": [{"type": {"kode": "DAGL", "beskrivelse": "Daglig leder"}, "person": {"navn": {"fornavn": state.get("ceo", "Kent-Helge"), "etternavn": "Holst"}, "fodselsdato": "1970-01-01"}, "fratraadt": False}]},
                     {"type": {"kode": "REVI", "beskrivelse": "Revisor"}, "sistEndret": "2010-08-25", "roller": [{"type": {"kode": "REVI", "beskrivelse": "Revisor"}, "enhet": {"organisasjonsnummer": "987009713", "navn": ["PRICEWATERHOUSECOOPERS AS"]}, "fratraadt": False}]},
                 ]})
+            if path == f"/enhetsregisteret/api/konsernstruktur/{ORG}":
+                return httpx.Response(200, json={"organisasjonsnummer": "935955211", "navn": "BARLINDHAUG AS", "children": [
+                    {"organisasjonsnummer": ORG, "navn": "CONSTO AS", "grunnlag": "100%", "dato": "2023-09-20", "nivaa": 1, "parentOrganisasjonsnummer": "935955211", "parentNavn": "BARLINDHAUG AS",
+                     "children": [{"organisasjonsnummer": "917078297", "navn": "COBA EIENDOM AS", "grunnlag": "100%", "dato": "2024-04-02", "nivaa": 2}]}]})
             if path.startswith("/enhetsregisteret/api/enheter/"):
                 body = entity(path.rsplit("/", 1)[-1])
                 return httpx.Response(200, json=body) if body else httpx.Response(404)
@@ -233,3 +237,13 @@ def test_failed_source_keeps_last_supported_value_as_stale(tmp_path):
     stale = [c for c in envelope["claims"] if c.get("stale")]
     assert any(c["field"] == "leadership.ceo" for c in stale)
     assert not any(c["type"] == "removed_role" for c in envelope["changes"])
+
+
+def test_group_structure_is_labelled_parent_and_subsidiary(tmp_path):
+    envelopes, _ = run_world(tmp_path, {}, [ORG])
+    claims = {c["field"]: c for c in by_org(envelopes)[ORG]["claims"]}
+    assert claims["group.parent"]["value"] == "BARLINDHAUG AS (935955211)"
+    assert claims["group.parent"]["relationship"] == "parent"
+    assert claims["group.subsidiary"]["subsidiary_organisation_number"] == "917078297"
+    assert claims["group.subsidiary"]["relationship"] == "subsidiary"
+    assert "corporate group" in by_org(envelopes)[ORG]["synthesis"]["paragraphs"][0]["text"]

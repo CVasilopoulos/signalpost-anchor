@@ -83,6 +83,25 @@ def build_synthesis(ctx: CompanyContext, changes: list[dict[str, Any]] | None = 
         text = activity[0]["value"]
         sentence += f" Registered activity: “{text[:220]}{'…' if len(text) > 220 else ''}”."
         ids.append(activity[0]["id"])
+    parent = _claims(ctx, "group.parent")
+    ultimate = _claims(ctx, "group.ultimate_parent")
+    subsidiaries = [claim for claim in _claims(ctx, "group.subsidiary") if claim.get("level_below_company") == 1]
+    group_size = _claims(ctx, "group.size")
+    if parent or subsidiaries:
+        bits = []
+        if parent:
+            share = parent[0].get("ownership_basis")
+            bits.append(f"its direct parent is {parent[0]['value']}{f' ({share})' if share else ''}")
+            ids.append(parent[0]["id"])
+        if ultimate and (not parent or ultimate[0]["value"] != parent[0]["value"]):
+            bits.append(f"the ultimate parent is {ultimate[0]['value']}")
+            ids.append(ultimate[0]["id"])
+        if subsidiaries:
+            bits.append(f"it has {len(subsidiaries)} direct subsidiar{'ies' if len(subsidiaries) != 1 else 'y'} (e.g. {subsidiaries[0]['value']})")
+            ids += [claim["id"] for claim in subsidiaries[:10]]
+        size_text = f" of {group_size[0]['value']} registered entities" if group_size else ""
+        sentence += f" It belongs to a corporate group{size_text}: " + "; ".join(bits) + "."
+        ids += [claim["id"] for claim in group_size]
     if description:
         text = description[0]["value"]
         sentence += f" The company describes itself as: “{text[:200]}{'…' if len(text) > 200 else ''}” (company-provided copy)."

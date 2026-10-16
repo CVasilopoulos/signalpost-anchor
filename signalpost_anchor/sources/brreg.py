@@ -519,12 +519,10 @@ async def fetch_registry(fetcher: Fetcher, ctx: CompanyContext) -> None:
         for section in ("annual_accounts", "leadership", "workplaces"):
             ctx.ledger.section(section, "failed" if ctx.entity_status == "failed" else "not_available", "Legal entity not resolved in Enhetsregisteret")
         return
-    await asyncio.gather(
-        fetch_roles(fetcher, ctx),
-        fetch_subunits(fetcher, ctx),
-        fetch_accounts(fetcher, ctx),
-        fetch_updates(fetcher, ctx),
-    )
+    tasks = [fetch_roles(fetcher, ctx), fetch_subunits(fetcher, ctx), fetch_accounts(fetcher, ctx), fetch_updates(fetcher, ctx)]
+    if (ctx.entity or {}).get("erIKonsern"):
+        tasks.append(fetch_group(fetcher, ctx))
+    await asyncio.gather(*tasks)
 
 
 class FilingYearsWorker:
@@ -595,3 +593,64 @@ class FilingYearsWorker:
         ledger.claim("annual_accounts", "financials.filed_copy_years", years, [evidence_id], label="Years with an official annual-accounts copy in Regnskapsregisteret", as_of=years[-1])
         for year in years:
             ledger.claim("annual_accounts", "financials.filed_copy", f"Annual accounts {year} on file", [evidence_id], key=f"financials.filed_copy.{year}", label=f"Official annual-accounts copy filed ({year})", as_of=f"{year}-12-31", extra={"fiscal_year": year, "document_url": f"{ACCOUNTS_API}/aarsregnskap/kopi/{ctx.organisation_number}/{year}"})
+
+
+GROUP_SOURCE = "Brønnøysundregistrene – konsernstruktur"
+
+
+def _find_path(node: dict[str, Any], org: str, path: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+    current = path + [node]
+    if node.get("organisasjonsnummer") == org:
+        return current
+    for child in node.get("children") or []:
+        found = _find_path(child, org, current)
+        if found:
+            return found
+    return None
+
+
+def _descendants(node: dict[str, Any], depth: int = 0) -> list[tuple[dict[str, Any], int]]:
+    items: list[tuple[dict[str, Any], int]] = []
+    for child in node.get("children") or []:
+        items.append((child, depth + 1))
+        items.extend(_descendants(child, depth + 1))
+    return items
+
+
+def _count(node: dict[str, Any]) -> int:
+    return 1 + sum(_count(child) for child in node.get("children") or [])
+
+
+async def fetch_group(fetcher: Fetcher, ctx: CompanyContext, max_subsidiaries: int = 120) -> None:
+    ledger = ctx.ledger
+    url = f"{API}/konsernstruktur/{ctx.organisation_number}"
+    fetched = await fetcher.get(url, headers={"Accept": "application/json"})
+    if fetched.status in (404, 410, 204) or not fetched.ok:
+        if not fetched.ok and fetched.status not in (404, 410, 204):
+            ledger.error("brreg_group", url, fetched.error or f"HTTP {fetched.status}")
+        return
+    try:
+        root = fetched.json()
+    except ValueError:
+        return
+    if not isinstance(root, dict) or not root.get("organisasjonsnummer"):
+        return
+    path = _find_path(root, ctx.organisation_number, [])
+    if not path:
+        return
+
+    def ev(locator: str, span: str) -> str:
+        return ledger.evidence_for(fetched, source_name=GROUP_SOURCE, source_class="official_registry", licence_key="brreg", locator=locator, span=span)
+
+    ledger.claim("legal_identity", "group.size", _count(root), [ev("$", f"group rooted at {root.get('navn')} ({root.get('organisasjonsnummer')})")], label="Entities in registered corporate group", unit="entities")
+    if len(path) > 1:
+        top = path[0]
+        ledger.claim("legal_identity", "group.ultimate_parent", f"{top.get('navn')} ({top.get('organisasjonsnummer')})", [ev("$.organisasjonsnummer", f"{top.get('navn')} {top.get('organisasjonsnummer')}")], label="Ultimate parent in registered group", relationship="ultimate_parent", extra={"parent_organisation_number": top.get("organisasjonsnummer"), "parent_legal_form": _get(top, "organisasjonsform", "kode")})
+        node = path[-1]
+        parent = path[-2]
+        ledger.claim("legal_identity", "group.parent", f"{parent.get('navn')} ({parent.get('organisasjonsnummer')})", [ev(f"node {ctx.organisation_number}.parentOrganisasjonsnummer", f"parent {node.get('parentNavn')} {node.get('parentOrganisasjonsnummer')} {node.get('grunnlag')} {node.get('dato')}")], label="Direct parent (konsern mor)", relationship="parent", as_of=node.get("dato"), extra={"parent_organisation_number": parent.get("organisasjonsnummer"), "ownership_basis": node.get("grunnlag"), "link_type": _get(node, "knytningsform", "beskrivelse")})
+    for child, depth in _descendants(path[-1])[:max_subsidiaries]:
+        org = child.get("organisasjonsnummer")
+        value = f"{child.get('navn')} ({org})"
+        label = "Subsidiary" if depth == 1 else f"Indirect subsidiary (level {depth})"
+        ledger.claim("legal_identity", "group.subsidiary", value, [ev(f"node {org}", f"{child.get('navn')} {org} {child.get('grunnlag')} {child.get('dato')} {_get(child, 'knytningsform', 'beskrivelse')}")], key=f"group.subsidiary.{org}", label=label, relationship="subsidiary", as_of=child.get("dato"), extra={"subsidiary_organisation_number": org, "ownership_basis": child.get("grunnlag"), "level_below_company": depth, "link_type": _get(child, "knytningsform", "beskrivelse")})
