@@ -6,4 +6,3 @@ out/
 runs/
 *.tmp
 .DS_Store
-.claude/
