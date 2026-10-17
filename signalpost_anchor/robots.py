@@ -21,8 +21,10 @@ class RobotsCache:
             if origin in self._cache:
                 return self._cache[origin]
             fetched = await self.fetcher.get(origin + "/robots.txt", max_bytes=500_000, retries=0, timeout=8)
-            if fetched.error:
-                result: tuple[RobotFileParser | None, str, list[str]] = (None, "unreachable", [])
+            if fetched.error and fetched.error.startswith(("ConnectTimeout", "ConnectError")):
+                result: tuple[RobotFileParser | None, str, list[str]] = (None, "connect_failed:" + fetched.error.split(":")[0], [])
+            elif fetched.error:
+                result = (None, "unreachable", [])
             elif fetched.status >= 500:
                 result = (None, "server_error", [])
             elif fetched.status >= 400 or not fetched.content:
@@ -45,6 +47,8 @@ class RobotsCache:
         parser, status, _ = await self._load(origin)
         if status == "server_error":
             return False, "robots.txt returned a server error (treated as disallow)"
+        if status.startswith("connect_failed:"):
+            return False, f"host unreachable ({status.split(':', 1)[1]})"
         if parser is None:
             return True, status
         if parser.can_fetch(AGENT_TOKEN, url):
