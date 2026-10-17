@@ -21,6 +21,9 @@ class RobotsCache:
             if origin in self._cache:
                 return self._cache[origin]
             fetched = await self.fetcher.get(origin + "/robots.txt", max_bytes=500_000, retries=0, timeout=8)
+            if fetched.error and fetched.error.startswith(("ConnectTimeout", "ConnectError")) and "SSL" not in fetched.error:
+                await asyncio.sleep(1.0)
+                fetched = await self.fetcher.get(origin + "/robots.txt", max_bytes=500_000, retries=0, timeout=8)
             if fetched.error and fetched.error.startswith(("ConnectTimeout", "ConnectError")):
                 result: tuple[RobotFileParser | None, str, list[str]] = (None, "connect_failed:" + fetched.error.split(":")[0], [])
             elif fetched.error:
