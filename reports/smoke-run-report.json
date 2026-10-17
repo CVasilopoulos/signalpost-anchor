@@ -2,16 +2,16 @@
   "report_version": "signalpost-anchor-run-report/1.0",
   "agent": {
     "name": "Signalpost Anchor",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "run": {
-    "run_id": "smoke-100-final",
-    "started_at": "2026-10-16T09:02:34.517Z",
-    "completed_at": "2026-10-16T09:04:01.196Z",
+    "run_id": "smoke-100-rev1",
+    "started_at": "2026-10-17T16:15:11.214Z",
+    "completed_at": "2026-10-17T16:16:55.056Z",
     "terminal_status": "completed",
     "agent": "Signalpost Anchor",
-    "agent_version": "1.0.0",
-    "evidence_cutoff": "2026-10-16T09:04:01.196Z"
+    "agent_version": "1.1.0",
+    "evidence_cutoff": "2026-10-17T16:16:55.056Z"
   },
   "environment": {
     "python": "3.12.14",
@@ -73,8 +73,8 @@
       "ambiguous": 4
     },
     "company_profiles": {
-      "not_available": 81,
-      "available": 19
+      "not_available": 82,
+      "available": 18
     },
     "hiring": {
       "not_available": 89,
@@ -84,8 +84,8 @@
       "available": 100
     },
     "contact": {
-      "available": 67,
-      "not_available": 33
+      "available": 68,
+      "not_available": 32
     },
     "external_identifiers": {
       "available": 100
@@ -97,12 +97,12 @@
     "leadership": 96,
     "registered_workplaces": 90,
     "verified_website": 27,
-    "company_profiles": 19,
+    "company_profiles": 18,
     "hiring_any": 11,
     "job_postings": 2,
-    "website_news": 7,
+    "website_news": 6,
     "registry_activity": 97,
-    "contact": 67,
+    "contact": 68,
     "lei": 13,
     "wikidata": 5,
     "public_brand": 25
@@ -113,21 +113,21 @@
     "leadership": 0.96,
     "registered_workplaces": 0.9,
     "verified_website": 0.27,
-    "company_profiles": 0.19,
+    "company_profiles": 0.18,
     "hiring_any": 0.11,
     "job_postings": 0.02,
-    "website_news": 0.07,
+    "website_news": 0.06,
     "registry_activity": 0.97,
-    "contact": 0.67,
+    "contact": 0.68,
     "lei": 0.13,
     "wikidata": 0.05,
     "public_brand": 0.25
   },
   "claims": {
-    "total": 11705,
-    "per_company_mean": 117.0,
+    "total": 12070,
+    "per_company_mean": 120.7,
     "by_field": {
-      "financials.filed_copy": 420,
+      "financials.filed_copy": 509,
       "activity.role_group_changed": 295,
       "financials.annual_result": 279,
       "financials.total_assets": 279,
@@ -170,6 +170,7 @@
       "identity.in_business_register": 96,
       "identity.in_foundation_register": 96,
       "identity.in_voluntary_register": 96,
+      "identity.in_party_register": 96,
       "identity.part_of_group": 96,
       "identity.registered_activity": 96,
       "identity.language_form": 96,
@@ -188,15 +189,16 @@
       "identity.number_of_shares": 76,
       "leadership.accountant": 72,
       "identity.vat_registered_date": 68,
+      "identity.vat_registered_in_register_date": 68,
       "leadership.ceo": 66,
       "group.subsidiary": 56,
       "identity.former_name": 53,
       "leadership.auditor": 51,
+      "financials.filed_copy_years": 49,
       "leadership.board_deputy_member": 49,
-      "financials.filed_copy_years": 41,
       "identity.employees": 41,
       "contact.registry_email": 39,
-      "activity.website_news": 39,
+      "activity.website_news": 38,
       "activity.registry_event": 35,
       "contact.registry_phone": 34,
       "contact.website_email": 34,
@@ -207,24 +209,30 @@
       "contact.postal_address": 26,
       "financials.investments": 26,
       "identity.public_brand": 25,
+      "contact.website_phone": 25,
+      "location.website_address": 24,
       "financials.goodwill": 23,
-      "contact.website_phone": 23,
       "website.description": 16,
-      "profile.facebook": 15,
       "website.registry_listed": 14,
+      "profile.facebook": 14,
+      "leadership.named_on_website": 14,
       "identifier.lei": 13,
       "identifier.lei_status": 13,
+      "location.lei_legal_address": 13,
+      "location.lei_headquarters_address": 13,
+      "identifier.lei_registered_date": 13,
+      "identity.voluntary_vat_basis": 11,
       "profile.linkedin": 11,
-      "profile.instagram": 11,
       "activity.registry_vat_status_change": 11,
+      "identity.voluntary_vat_registered_date": 10,
       "activity.registry_articles_updated": 10,
+      "profile.instagram": 10,
       "activity.registry_industry_change": 9,
-      "website.logo": 9,
       "hiring.career_page": 9,
       "activity.registry_liquidation": 9,
       "identifier.wikipedia_article": 8,
+      "website.logo": 8,
       "group.size": 6,
-      "location.website_address": 6,
       "leadership.business_manager": 6,
       "identity.liquidation_date": 6,
       "activity.registry_address_change": 6,
@@ -234,17 +242,22 @@
       "identity.inception_wikidata": 5,
       "identity.bankruptcy_date": 5,
       "activity.registry_capital_change": 4,
+      "identity.website_founded_year": 4,
       "identity.deleted_date": 4,
+      "identity.auxiliary_unit_code": 3,
       "hiring.recruitment_portal": 3,
       "activity.registry_postal_address_change": 3,
       "group.ultimate_parent": 3,
       "group.parent": 3,
+      "website.about_description": 3,
       "hiring.job_posting": 3,
       "profile.youtube": 2,
       "leadership.contact_person": 2,
       "leadership.parent_foreign_entity": 2,
+      "location.opening_hours": 2,
       "identity.employer_self_description": 2,
       "hiring.active_job_ads_nav": 2,
+      "profile.x": 2,
       "activity.registry_phone_change": 2,
       "activity.registry_name_change": 2,
       "activity.registry_legal_form_change": 2,
@@ -252,17 +265,17 @@
       "identifier.isin": 1,
       "leadership.norwegian_representative": 1,
       "activity.registry_email_change": 1,
-      "profile.x": 1,
+      "identity.voluntary_register_date": 1,
       "identity.website_founding_date": 1
     }
   },
   "website_verification_methods": {
-    "registry_email_domain_and_name_match": 5,
+    "registry_email_domain_and_name_match": 4,
     "registry_listed_and_name_match": 4,
     "wikidata_listed_and_name_match": 1,
     "subunit_registry_listed_and_name_match": 1,
     "organisation_number_on_site": 12,
-    "name_derived_domain_with_name_and_contact_match": 4
+    "name_derived_domain_with_name_and_contact_match": 5
   },
   "changes": {
     "total": 0,
@@ -273,12 +286,12 @@
     "enabled": true,
     "state": "complete",
     "token_source": "NAV published public token (api/publicToken)",
-    "pages_read": 373,
+    "pages_read": 370,
     "segments": 16,
     "lookback_days": 180,
-    "newest_change_seen": "2026-10-16T11:02:05.557268+02:00",
-    "ads_indexed": 89782,
-    "active_ads_indexed": 9907,
+    "newest_change_seen": "2026-10-17T17:54:02.093724+02:00",
+    "ads_indexed": 89226,
+    "active_ads_indexed": 10027,
     "error": null,
     "candidates": 69,
     "verified": 3,
@@ -294,40 +307,40 @@
     "errors": []
   },
   "operations": {
-    "requests": 1391,
-    "bytes_received": 206969606,
-    "request_p50_ms": 276,
-    "request_p95_ms": 1035,
+    "requests": 1465,
+    "bytes_received": 207685972,
+    "request_p50_ms": 223,
+    "request_p95_ms": 1074,
     "top_hosts": {
-      "data.brreg.no": 547,
-      "pam-stilling-feed.nav.no": 443,
+      "data.brreg.no": 555,
+      "pam-stilling-feed.nav.no": 440,
       "www.nho.no": 13,
       "webstep.no": 12,
       "bcc.media": 12,
       "www.vk.no": 11,
+      "www.dekkservice.no": 10,
       "www.jetro.no": 10,
       "snorreseafood.no": 10,
       "jgplastsveis.no": 9,
       "vselement.no": 9,
-      "idehytta.no": 8,
-      "www.geiafood.com": 8
+      "www.technoalpin.com": 8
     },
     "transport_errors": {
-      "ConnectError": 24,
-      "ConnectTimeout": 12
+      "ConnectError": 20,
+      "ConnectTimeout": 18
     },
-    "runtime_s": 86.8,
-    "company_runtime_p50_ms": 2458.6832989007235,
-    "company_runtime_p95_ms": 17879.863636102527,
+    "runtime_s": 103.9,
+    "company_runtime_p50_ms": 6348.530593793839,
+    "company_runtime_p95_ms": 27435.416439082474,
     "third_party_cost_usd": 0.0,
     "llm_calls": 0,
     "paid_apis": []
   },
   "filing_copy_years": {
-    "companies_checked": 41,
+    "companies_checked": 49,
     "skipped_no_accounts": 4,
     "rate_limited": 0,
     "stopped_at_time_budget": true,
-    "pending": 55
+    "pending": 47
   }
 }

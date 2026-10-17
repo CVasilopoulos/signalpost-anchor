@@ -80,23 +80,40 @@ How identities are proven: [docs/IDENTITY_RESOLUTION.md](docs/IDENTITY_RESOLUTIO
 
 ## 100-company smoke test
 
-Run from a clean clone at commit `7a3666d` in a fresh `python:3.12-slim` container (6 CPUs, 6 GB), only `pip install -r requirements.txt` before the run command:
+Run from a clean clone at commit `a31ae4f` in a fresh `python:3.12-slim` container (6 CPUs, 6 GB), only `pip install -r requirements.txt` before the run command:
 
 | Result | Value |
 |---|---|
 | Envelopes | 100 / 100, all terminal, validation passed |
-| Claims | 11,705 (117 per company), every one with source URL, retrieval time, SHA-256, locator and excerpt |
+| Claims | 12,070 (121 per company), every one with source URL, retrieval time, SHA-256, locator and excerpt |
 | Companies with accounts / roles / workplaces / registry activity | 96 / 96 / 90 / 97 |
 | Verified official website | 27 (12 by organisation number on the site) |
-| Company-owned profiles / contact details / LEI | 19 / 67 / 13 |
-| Wall-clock runtime | 87 s (p50 2.5 s, p95 17.9 s per company) |
-| Requests | 1,391 |
+| Company-owned profiles / contact details / LEI | 18 / 68 / 13 |
+| Wall-clock runtime | 104 s (p50 6.3 s, p95 27.4 s per company) |
+| Requests | 1,465 |
 | Third-party cost / model calls | USD 0 / 0 |
-| Refresh re-run on the same output | 0 change records (idempotent), 85 s |
+| Refresh re-run on a copy of the output | 0 change records (idempotent), 104 s |
 
 Full report with the per-company table: [reports/SMOKE_TEST.md](reports/SMOKE_TEST.md); machine-readable reports: `reports/smoke-run-report.json`, `reports/smoke-refresh-run-report.json`; the envelopes themselves: `reports/smoke-envelopes.jsonl.gz`. The batch (`reports/smoke-100-companies.jsonl`) mixes size bands and legal forms from the public universe with bankrupt, liquidating, deleted and sole-proprietorship entities from the live register.
 
-A 1,000-company random sample from the public universe completed in 899 s with 1,000/1,000 envelopes and 105,072 claims (an earlier build that let the provider-rate-limited filed-copy lookup run for its full 900 s; the current build stops that lookup 60 s after company research ends).
+A 1,000-company random sample from the public universe (`reports/sample-1000-companies.jsonl`) completed in 460 s with 1,000/1,000 envelopes and 105,665 claims from the same clean clone; report: `reports/sample-1000-run-report.json`.
+
+### Revision 1 (1.1.0) against the first submission (1.0.0, `499a573`)
+
+Both versions were run on the same machine on 2026-10-17 on three batches: the smoke batch, a uniform random sample of 100 companies from the public universe (`reports/random-100-companies.jsonl`, seed 20261017, smoke batch excluded; report `reports/random-100-run-report.json`, envelopes `reports/random-100-envelopes.jsonl.gz`) and the 1,000-company sample.
+
+| | Smoke 100 | Random 100 | Sample 1,000 |
+|---|---|---|---|
+| Verified websites, 1.0.0 → 1.1.0 | 27 → 27 | 12 → 10 | 119 → 122 |
+| New websites (each checked by hand, all correct) | 1 | 0 | 5 |
+| Sister, parent or shared group sites no longer published as the company's own | 0 | 2 | 2 |
+| Websites lost because the site did not answer in that run | 1 | 0 | 0 |
+| Claims, 1.0.0 → 1.1.0 | 11,755 → 12,070 | 10,542 → 10,840 | 102,498 → 105,665 |
+| Distinct claim types | 127 → 140 | 106 → 117 | 128 → 143 |
+| Claims read from verified websites | 279 → 319 | 93 → 88 | 1,153 → 1,385 |
+| Wall-clock runtime | 93 s → 104 s | 98 s → 126 s | 304 s → 460 s |
+
+New websites: acceptelektro.no (smoke batch, legal name and registered address on the site), and in the 1,000 sample invested.no, løsdet.no (IDN form) and dagalihotel.no (reached through a redirect from dagalihotell.no), each showing the organisation number, plus telemarkpukk.no and juliusorenberg.no (legal name and registered address). idehytta.no did not answer during either 1.1.0 run on the smoke batch, also from a second network. Four sites are no longer published as the company's own. Three were name-derived domains that showed the company's name and registered address but carried the organisation number of a different company at the same address: spirhed.com (SPIRHED GROUP AS, for SPIRHED AS), velierocapital.com (VELIERO CAPITAL MANAGEMENT AS, for VELIERO CAPITAL AS) and bonmed.no (BONMED DRIFT AS, for BONMED AS). The fourth, norskms.no, the registered email domain of NORSK MILJØSERVICE ØST AS, is a shared site that lists three companies of the group with their numbers. 1.0.0 accepted them on name and address or on the number alone; 1.1.0 rejects a name-derived or email-domain site that shows another organisation number and not the company's own, publishes it as `website.parent_company_site` when that number is the registered parent, and publishes a shared site that lists the company's number among others as `website.group_brand_site` (norskms.no above), never as the company's own site. Further changes: wider name-derived domain candidates (IDN, legal suffix anywhere, `<name>as.no`, `.as`, first two words, former names), redirects followed only to domains that spell the name, organisation numbers read from links to the site's own Brønnøysund or Proff entry, registry fields that were fetched but not emitted (VAT registration in the register, voluntary VAT and its basis, Frivillighets- and Partiregisteret, auxiliary unit code, annotations), LEI addresses and first-issued date, and from verified websites opening hours, the registered address as shown on the site, labelled phone numbers, structured-data contacts, products and services, stated founding year, about-page description and registry role holders named on the site. DNS timeouts are retried instead of cached, a robots.txt connection failure is retried once and then treats the host as unreachable, and a refresh no longer reports filed-copy years as new when the rate-limited filed-copy lookup had not reached that company in the previous run.
 
 ## Tests
 
@@ -104,4 +121,4 @@ A 1,000-company random sample from the public universe completed in 899 s with 1
 .venv/bin/pip install -r requirements-dev.txt && .venv/bin/python -m pytest -q
 ```
 
-The offline suite replays a mocked registry, NAV feed and company site through the whole pipeline: one envelope per input including invalid and duplicate numbers, organisation-number website verification, employer-number checks on job ads, unknown-not-zero accounts, evidence completeness, no birth dates stored, idempotent refresh, typed material changes with preserved evidence, and stale carry-forward when a source fails. A separate suite checks the generated site, including escaping of hostile page text.
+The offline suite replays a mocked registry, NAV feed and company site through the whole pipeline: one envelope per input including invalid and duplicate numbers, organisation-number website verification, a name-derived site carrying the parent's number labelled as the parent's site, employer-number checks on job ads, unknown-not-zero accounts, evidence completeness, no birth dates stored, idempotent refresh, no change records for facts from a source that was not checked in the previous run, typed material changes with preserved evidence, and stale carry-forward when a source fails. Unit tests cover domain guessing, organisation numbers in registry links, identity-page ranking, opening hours, labelled phone numbers, role-holder name matching and the robots.txt retry. A separate suite checks the generated site, including escaping of hostile page text.
