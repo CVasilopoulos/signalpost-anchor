@@ -151,37 +151,54 @@ def domain_label_matches(name: str, domain: str) -> bool:
     return bool(distinct) and len(distinct[0]) >= 5 and label.startswith(distinct[0]) and len(label) <= len(distinct[0]) + 12
 
 
-def guess_domains(name: str, limit: int = 6) -> list[str]:
+def _domain_bases(parts: list[str]) -> list[tuple[str, str]]:
+    bases: list[tuple[str, str]] = []
+    for kind, table in (("ascii", TRANSLIT), ("idn", None), ("ascii_alt", TRANSLIT_ALT)):
+        if table is None:
+            words = [re.sub(r"[^a-z0-9æøå]", "", part) for part in parts]
+            if not any(re.search(r"[æøå]", word) for word in words):
+                continue
+        else:
+            words = [re.sub(r"[^a-z0-9]", "", part.translate(table)) for part in parts]
+        words = [word for word in words if word]
+        if not words:
+            continue
+        joined = "".join(words)
+        if 4 <= len(joined) <= 40:
+            bases.append((kind, joined))
+        if len(words) > 1:
+            hyphen = "-".join(words)
+            if len(hyphen) <= 40:
+                bases.append((kind, hyphen))
+    return bases
+
+
+def guess_domains(name: str, limit: int = 10) -> list[str]:
     core = [part.lower() for part in core_tokens(name)]
     distinct = [part.lower() for part in distinctive_tokens(name)]
     if not core or not distinct:
         return []
-    bases: list[str] = []
+    full = [part for part in core if re.search(r"\w", part) and part != "og"]
+    is_as = any(part in ("AS", "ASA") for part in tokens(name))
+    full_bases = _domain_bases(full)
+    distinct_bases = _domain_bases(distinct) if len(distinct) < len(full) else []
+    prefix_bases = _domain_bases(full[:2]) if len(full) >= 3 else []
 
-    def add(parts: list[str]) -> None:
-        if not parts:
-            return
-        for table in (TRANSLIT, TRANSLIT_ALT):
-            words = [re.sub(r"[^a-z0-9]", "", part.translate(table)) for part in parts]
-            words = [word for word in words if word]
-            if not words:
-                continue
-            joined = "".join(words)
-            if 4 <= len(joined) <= 40 and joined not in bases:
-                bases.append(joined)
-            if len(words) > 1:
-                hyphen = "-".join(words)
-                if len(hyphen) <= 40 and hyphen not in bases:
-                    bases.append(hyphen)
+    def pick(bases: list[tuple[str, str]], kind: str, hyphen: bool | None = None) -> list[str]:
+        return [base for k, base in bases if k == kind and (hyphen is None or ("-" in base) == hyphen)]
 
-    add([part for part in core if part != "og"])
-    if len(distinct) < len(core):
-        add(distinct)
-    domains = []
-    for base in bases:
-        domains.append(f"{base}.no")
-    if bases:
-        domains.append(f"{bases[0]}.com")
+    domains: list[str] = []
+    domains += [f"{base}.no" for base in pick(full_bases, "ascii")]
+    domains += [f"{base}.no" for base in pick(full_bases, "idn")]
+    domains += [f"{base}.no" for base in pick(distinct_bases, "ascii")]
+    domains += [f"{base}.com" for base in pick(full_bases, "ascii", False)[:1]]
+    domains += [f"{base}.no" for base in pick(prefix_bases, "ascii", False)[:1]]
+    domains += [f"{base}.no" for base in pick(full_bases, "ascii_alt", False)[:1]]
+    if is_as:
+        domains += [f"{base}as.no" for base in pick(full_bases, "ascii", False)[:1]]
+        domains += [f"{base}.as" for base in pick(full_bases, "ascii", False)[:1]]
+    domains += [f"{base}.no" for base in pick(distinct_bases, "idn", False)[:1]]
+    domains += [f"{base}.com" for base in pick(distinct_bases, "ascii", False)[:1]]
     unique = list(dict.fromkeys(domains))
     return unique[:limit]
 

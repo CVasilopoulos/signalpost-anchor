@@ -229,6 +229,10 @@ async def fetch_entity(fetcher: Fetcher, ctx: CompanyContext) -> None:
         ("stiftelsesdato", "identity.founded_date", "Founded"),
         ("vedtektsdato", "identity.articles_date", "Articles of association dated"),
         ("registreringsdatoMerverdiavgiftsregisteret", "identity.vat_registered_date", "Registered for VAT"),
+        ("registreringsdatoMerverdiavgiftsregisteretEnhetsregisteret", "identity.vat_registered_in_register_date", "VAT registration recorded in Enhetsregisteret"),
+        ("registreringsdatoFrivilligMerverdiavgiftsregisteret", "identity.voluntary_vat_registered_date", "Voluntarily registered for VAT"),
+        ("registreringsdatoFrivillighetsregisteret", "identity.voluntary_register_date", "Registered in Frivillighetsregisteret"),
+        ("registreringsdatoPartiregisteret", "identity.party_register_date", "Registered in Partiregisteret"),
     ):
         if body.get(key):
             c("legal_identity", field, body[key], [ev(f"$.{key}", body[key])], label=label, as_of=body[key])
@@ -237,6 +241,7 @@ async def fetch_entity(fetcher: Fetcher, ctx: CompanyContext) -> None:
         ("registrertIForetaksregisteret", "identity.in_business_register", "In Foretaksregisteret"),
         ("registrertIStiftelsesregisteret", "identity.in_foundation_register", "In Stiftelsesregisteret"),
         ("registrertIFrivillighetsregisteret", "identity.in_voluntary_register", "In Frivillighetsregisteret"),
+        ("registrertIPartiregisteret", "identity.in_party_register", "In Partiregisteret"),
         ("erIKonsern", "identity.part_of_group", "Part of a corporate group"),
     ):
         if key in body and body[key] is not None:
@@ -245,6 +250,16 @@ async def fetch_entity(fetcher: Fetcher, ctx: CompanyContext) -> None:
         code = body.get(key) or {}
         if code.get("kode"):
             c("legal_identity", "identity.industry", f"{code['kode']} {code.get('beskrivelse', '')}".strip(), [ev(f"$.{key}", code.get("beskrivelse"))], key=f"identity.industry.{index}", label="Primary industry (NACE)" if index == 1 else f"Industry (NACE) #{index}")
+    for index, text in enumerate(body.get("frivilligMvaRegistrertBeskrivelser") or []):
+        if text:
+            c("legal_identity", "identity.voluntary_vat_basis", text, [ev(f"$.frivilligMvaRegistrertBeskrivelser[{index}]", text)], key=f"identity.voluntary_vat_basis.{index}", label="Basis for voluntary VAT registration", as_of=body.get("registreringsdatoFrivilligMerverdiavgiftsregisteret"))
+    helper = body.get("hjelpeenhetskode") or {}
+    if helper.get("kode"):
+        c("legal_identity", "identity.auxiliary_unit_code", f"{helper['kode']} {helper.get('beskrivelse', '')}".strip(), [ev("$.hjelpeenhetskode", helper.get("beskrivelse"))], label="Auxiliary unit code")
+    for index, note in enumerate(body.get("paategninger") or []):
+        text = note.get("tekst") if isinstance(note, dict) else note
+        if text:
+            c("legal_identity", "identity.registry_annotation", str(text), [ev(f"$.paategninger[{index}]", text)], key=f"identity.registry_annotation.{index}", label="Annotation in Enhetsregisteret", as_of=(note.get("innfoertDato") if isinstance(note, dict) else None))
     sector = body.get("institusjonellSektorkode") or {}
     if sector.get("kode"):
         c("legal_identity", "identity.institutional_sector", f"{sector['kode']} {sector.get('beskrivelse', '')}".strip(), [ev("$.institusjonellSektorkode", sector.get("beskrivelse"))], label="Institutional sector")

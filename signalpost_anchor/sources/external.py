@@ -100,6 +100,15 @@ async def wikidata_lookup(fetcher: Fetcher, orgs: list[str], batch: int = 150) -
     return results, errors
 
 
+def gleif_address(value: Any) -> str | None:
+    if not isinstance(value, dict):
+        return None
+    lines = [line for line in value.get("addressLines") or [] if line]
+    place = " ".join(part for part in (value.get("postalCode"), value.get("city")) if part)
+    parts = lines + ([place] if place else []) + ([value["country"]] if value.get("country") else [])
+    return ", ".join(parts) or None
+
+
 def gleif_format(org: str) -> str:
     return f"{org[0:3]} {org[3:6]} {org[6:9]}"
 
@@ -141,6 +150,10 @@ async def gleif_lookup(fetcher: Fetcher, orgs: list[str], batch: int = 80) -> tu
                     "initial_registration": (registration.get("initialRegistrationDate") or "")[:10] or None,
                     "next_renewal": (registration.get("nextRenewalDate") or "")[:10] or None,
                     "last_update": (registration.get("lastUpdateDate") or "")[:10] or None,
+                    "legal_address": gleif_address(entity.get("legalAddress")),
+                    "headquarters_address": gleif_address(entity.get("headquartersAddress")),
+                    "category": entity.get("category"),
+                    "corroboration": registration.get("corroborationLevel"),
                     "index": index,
                     "fetched": fetched,
                 }
@@ -194,6 +207,12 @@ def apply_external(ctx: CompanyContext, external: dict[str, Any]) -> None:
         ledger.claim("external_identifiers", "identifier.lei", lei["lei"], [evidence_id], label="Legal Entity Identifier (LEI)", method="official_api_field", as_of=lei.get("last_update"), extra={k: lei[k] for k in ("legal_name", "entity_status", "registration_status", "initial_registration", "next_renewal")})
         if lei.get("registration_status"):
             ledger.claim("external_identifiers", "identifier.lei_status", lei["registration_status"], [evidence_id], label="LEI registration status", as_of=lei.get("last_update"), extra={"next_renewal": lei.get("next_renewal")})
+        for key, field, label in (("legal_address", "location.lei_legal_address", "Legal address in the LEI record"), ("headquarters_address", "location.lei_headquarters_address", "Headquarters address in the LEI record")):
+            if lei.get(key):
+                address_ev = ledger.evidence_for(fetched, source_name=GLEIF_SOURCE, source_class="official_api", licence_key="gleif", locator=f"$.data[{lei['index']}].attributes.entity.{key.replace('_a', 'A')}", span=lei[key], source_url=page, method="official_api_field")
+                ledger.claim("workplaces", field, lei[key], [address_ev], label=label, method="official_api_field", as_of=lei.get("last_update"))
+        if lei.get("initial_registration"):
+            ledger.claim("external_identifiers", "identifier.lei_registered_date", lei["initial_registration"], [evidence_id], label="LEI first issued", as_of=lei["initial_registration"])
         sources.append(GLEIF_SOURCE)
     if not external.get("wikidata_failed"):
         ledger.checked("wikidata")

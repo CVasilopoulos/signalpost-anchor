@@ -187,12 +187,19 @@ class Fetcher:
         except ValueError:
             pass
         loop = asyncio.get_running_loop()
-        try:
-            infos = await asyncio.wait_for(loop.getaddrinfo(host, None, type=socket.SOCK_STREAM), timeout=6)
-        except (OSError, asyncio.TimeoutError) as exc:
-            result = (False, f"dns: {type(exc).__name__}")
-            self._dns[host] = result
-            return result
+        infos = None
+        for wait in (6, 12):
+            try:
+                infos = await asyncio.wait_for(loop.getaddrinfo(host, None, type=socket.SOCK_STREAM), timeout=wait)
+                break
+            except asyncio.TimeoutError:
+                continue
+            except OSError as exc:
+                result = (False, f"dns: {type(exc).__name__}")
+                self._dns[host] = result
+                return result
+        if infos is None:
+            return (False, "dns: TimeoutError")
         addresses = {info[4][0] for info in infos}
         if not addresses:
             result = (False, "dns: no address")

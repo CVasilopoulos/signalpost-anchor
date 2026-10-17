@@ -1,4 +1,6 @@
 from signalpost_anchor import extract
+from signalpost_anchor.http import Fetched
+from signalpost_anchor.sources.website import TEXT_PHONE, opening_hours_text, parse_page
 
 HTML = """
 <html lang="nb"><head><title>Verdal Kabel-TV | Fiber og TV</title>
@@ -65,3 +67,43 @@ def test_sitemap_parser_separates_index_from_urls():
 def test_dates_outside_plausible_range_are_dropped():
     assert extract.parse_date("1970-01-01") is None
     assert extract.parse_date("31.12.2025") == "2025-12-31"
+
+
+def page_from(html: str, url: str = "https://www.vktv.no/"):
+    return parse_page(Fetched(url=url, final_url=url, status=200, content=html.encode(), content_type="text/html", retrieved_at="2026-10-17T00:00:00Z", sha256="0" * 64, elapsed_ms=1))
+
+
+def test_organisation_number_in_registry_link_counts_as_on_site():
+    page = page_from('<html><body><a href="https://virksomhet.brreg.no/nb/oppslag/enheter/947422464">Firmaopplysninger</a><a href="https://example.com/947422464">x</a></body></html>')
+    assert page.orgnrs == {"947422464"}
+    assert page.orgnr_links["947422464"].startswith("https://virksomhet.brreg.no/")
+    assert parse_page(Fetched(url="https://a.no/", final_url="https://a.no/", status=200, content=b'<a href="https://example.com/947422464">x</a>', content_type="text/html", retrieved_at="", sha256="", elapsed_ms=1)).orgnrs == set()
+
+
+def test_opening_hours_from_specification_and_plain_text():
+    spec = {"openingHoursSpecification": [{"dayOfWeek": ["https://schema.org/Monday", "Tuesday"], "opens": "08:00:00", "closes": "16:00:00"}]}
+    assert opening_hours_text(spec) == "Mo,Tu 08:00-16:00"
+    assert opening_hours_text({"openingHours": ["Mo-Fr 09:00-17:00", "Sa 10:00-14:00"]}) == "Mo-Fr 09:00-17:00; Sa 10:00-14:00"
+    assert opening_hours_text({}) is None
+
+
+def test_labelled_phone_numbers_in_page_text():
+    found = [match.group(1) for match in TEXT_PHONE.finditer("Ring oss på tlf: 74 07 69 40 eller mobil +47 900 12 345. Org.nr 947 422 464")]
+    assert found == ["74 07 69 40", "+47 900 12 345"]
+
+
+def test_role_holder_on_site_needs_their_own_middle_names_or_none():
+    from signalpost_anchor.context import CompanyContext
+    from signalpost_anchor.ledger import Ledger
+    from signalpost_anchor.sources.website import WebsiteResearcher
+
+    ctx = CompanyContext("947422464", Ledger("947422464"))
+    ctx.entity = {"navn": "VERDAL KABEL TV AS"}
+    ctx.roles = [
+        {"type": "person", "holder": "Ole Hansen", "label": "Daglig leder", "code": "DAGL"},
+        {"type": "person", "holder": "Marius Alexander Skovli", "label": "Styrets leder", "code": "LEDE"},
+    ]
+    page = page_from("<html><body><p>Kontakt Ole Martin Hansen eller styreleder Marius A. Skovli.</p></body></html>")
+    WebsiteResearcher(None, None)._publish_site_facts(ctx, [page], page)
+    named = [claim["value"] for claim in ctx.ledger.claims if claim["field"] == "leadership.named_on_website"]
+    assert named == ["Marius Alexander Skovli (Styrets leder)"]

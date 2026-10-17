@@ -72,6 +72,8 @@ def finalise_sections(ctx: CompanyContext) -> dict[str, Any]:
         section["claim_ids"] = [claim["id"] for claim in ledger.claims if claim["section"] == name]
         section["claim_count"] = len(section["claim_ids"])
         section["label"] = SECTION_LABELS[name]
+        if section["state"] == "not_available" and name != "website" and section["claim_count"]:
+            section["state"] = "available"
         output[name] = section
     return output
 

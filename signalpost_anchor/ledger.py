@@ -173,6 +173,12 @@ class Ledger:
                 return existing["id"]
             stable_key = f"{stable_key}#{short_hash(value, length=8)}"
             claim_id = "c-" + short_hash(self.organisation_number, stable_key, value)
+            if stable_key in self._claim_keys:
+                existing = self.claims[self._claim_keys[stable_key]]
+                for evidence_id in evidence_ids:
+                    if evidence_id not in existing["evidence_ids"]:
+                        existing["evidence_ids"].append(evidence_id)
+                return existing["id"]
         record: dict[str, Any] = {
             "id": claim_id,
             "key": stable_key,

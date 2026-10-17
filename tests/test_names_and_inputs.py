@@ -46,6 +46,18 @@ def test_domain_guesses_cover_joined_and_hyphenated_forms():
     assert guess_domains("HOLDING AS") == []
 
 
+def test_domain_guesses_add_idn_legal_suffix_and_short_forms():
+    guesses = guess_domains("SØRLANDETS BÅT AS")
+    assert guesses[:2] == ["sorlandetsbat.no", "sorlandets-bat.no"]
+    assert "sørlandetsbåt.no" in guesses
+    assert "sorlandetsbatas.no" in guesses
+    assert "sorlandetsbat.as" in guesses
+    assert "sorlandetsbatas.no" not in guess_domains("SØRLANDETS BÅT SA")
+    assert "oddvarhagen.no" in guess_domains("ODDVAR HAGEN GARTNERI OG BLOMSTER AS")
+    assert guess_domains("AS BØE & LEPSØY")[0] == "boelepsoy.no"
+    assert all(len(guess_domains(name)) <= 10 for name in ("VIGSNÆS + KOSBERG ++ ARKITEKTER AS", "C OPTIKK EIDSVOLL AS"))
+
+
 def test_domain_label_matching_handles_norwegian_letters_and_acronyms():
     assert domain_label_matches("ANTIKVARIAT BRYGGEN AS", "antikvariat-bryggen.no")
     assert domain_label_matches("VERDAL KABEL TV AS", "vktv.no")
@@ -77,3 +89,12 @@ def test_duplicate_inputs_produce_one_record():
     unique, duplicates = dedupe([("995754606", {}), ("995754606", {}), ("923609016", {})])
     assert [org for org, _ in unique] == ["995754606", "923609016"]
     assert duplicates == ["995754606"]
+
+
+def test_official_link_domain_must_spell_the_whole_name():
+    from signalpost_anchor.sources.website import strict_label_match
+
+    assert strict_label_match("OVESEN INVEST AS", "oveseninvest.no")
+    assert strict_label_match("SØRLANDETS BÅT AS", "sørlandetsbåt.no")
+    assert not strict_label_match("OVESEN INVEST AS", "ovesen.no")
+    assert not strict_label_match("RINGSTAD TERRASSE 2 BORETTSLAG", "gobb.no")

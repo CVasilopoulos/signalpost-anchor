@@ -11,6 +11,7 @@ from signalpost_anchor.validate import validate_envelopes
 ORG = "995754606"
 OTHER = "923609016"
 SUBUNIT = "974760673"
+SISTER = "913000013"
 
 SITE_HTML = """<html lang="nb"><head><title>Consto | Bygg og anlegg</title>
 <meta name="description" content="Consto bygger bærekraftige løsninger i Nord-Norge.">
@@ -35,6 +36,11 @@ def world(state: dict):
                 "naeringskode1": {"kode": "41.000", "beskrivelse": "Oppføring av bygninger"}, "registreringsdatoEnhetsregisteret": "2010-08-25",
                 "konkurs": False, "underAvvikling": False, "sisteInnsendteAarsregnskap": "2025", "aktivitet": ["Entreprenørvirksomhet"], "erIKonsern": True,
             }
+        if org == SISTER:
+            return {
+                "organisasjonsnummer": SISTER, "navn": "NORDLYS BAKERI AS", "organisasjonsform": {"kode": "AS", "beskrivelse": "Aksjeselskap"}, "harRegistrertAntallAnsatte": False,
+                "forretningsadresse": {"adresse": ["Storgata 1"], "postnummer": "9008", "poststed": "TROMSØ", "kommune": "TROMSØ", "land": "Norge"}, "konkurs": False, "underAvvikling": False, "erIKonsern": True,
+            }
         if org == OTHER:
             return {"organisasjonsnummer": OTHER, "navn": "TOMT HOLDING AS", "organisasjonsform": {"kode": "AS", "beskrivelse": "Aksjeselskap"}, "harRegistrertAntallAnsatte": False, "konkurs": True}
         return None
@@ -56,6 +62,9 @@ def world(state: dict):
                 return httpx.Response(200, json={"organisasjonsnummer": "935955211", "navn": "BARLINDHAUG AS", "children": [
                     {"organisasjonsnummer": ORG, "navn": "CONSTO AS", "grunnlag": "100%", "dato": "2023-09-20", "nivaa": 1, "parentOrganisasjonsnummer": "935955211", "parentNavn": "BARLINDHAUG AS",
                      "children": [{"organisasjonsnummer": "917078297", "navn": "COBA EIENDOM AS", "grunnlag": "100%", "dato": "2024-04-02", "nivaa": 2}]}]})
+            if path == f"/enhetsregisteret/api/konsernstruktur/{SISTER}":
+                return httpx.Response(200, json={"organisasjonsnummer": "935955211", "navn": "BARLINDHAUG AS", "children": [
+                    {"organisasjonsnummer": SISTER, "navn": "NORDLYS BAKERI AS", "grunnlag": "100%", "dato": "2024-01-02", "nivaa": 1, "parentOrganisasjonsnummer": "935955211", "parentNavn": "BARLINDHAUG AS"}]})
             if path.startswith("/enhetsregisteret/api/enheter/"):
                 body = entity(path.rsplit("/", 1)[-1])
                 return httpx.Response(200, json=body) if body else httpx.Response(404)
@@ -95,6 +104,11 @@ def world(state: dict):
                 return httpx.Response(200, json={"uuid": "u1", "status": "ACTIVE", "ad_content": {"title": "Tømrer", "published": "2026-10-09T09:00:00+02:00", "expires": "2026-11-01T00:00:00+01:00", "link": "https://arbeidsplassen.nav.no/stillinger/stilling/u1", "employer": {"name": "CONSTO AS AVD TROMSØ", "orgnr": SUBUNIT, "homepage": "https://consto.no"}, "workLocations": [{"city": "TROMSØ"}], "contactList": [{"name": "Private Person", "phone": "99999999"}]}})
             if path == "/api/v1/feedentry/u2":
                 return httpx.Response(200, json={"uuid": "u2", "status": "ACTIVE", "ad_content": {"title": "Snekker", "employer": {"name": "CONSTO AS", "orgnr": "111111118"}}})
+        if host == "nordlysbakeri.no":
+            if path == "/robots.txt":
+                return httpx.Response(404)
+            if path in ("/", ""):
+                return httpx.Response(200, text="<html><head><title>Nordlys Bakeri</title></head><body><h1>Nordlys Bakeri</h1><p>Storgata 1, 9008 Tromsø</p><footer>Barlindhaug AS · org.nr 935 955 211</footer></body></html>", headers={"content-type": "text/html"})
         if host in ("consto.no", "www.consto.no"):
             if path == "/robots.txt":
                 return httpx.Response(200, text="User-agent: *\nDisallow: /intern/\n")
@@ -254,3 +268,15 @@ def test_group_structure_is_labelled_parent_and_subsidiary(tmp_path):
     assert claims["group.subsidiary"]["subsidiary_organisation_number"] == "917078297"
     assert claims["group.subsidiary"]["relationship"] == "subsidiary"
     assert "corporate group" in by_org(envelopes)[ORG]["synthesis"]["paragraphs"][0]["text"]
+
+
+def test_derived_domain_showing_the_parents_number_is_labelled_not_collapsed(tmp_path):
+    envelopes, _ = run_world(tmp_path, {}, [SISTER])
+    bakery = by_org(envelopes)[SISTER]
+    assert "website.official_url" not in fields(bakery)
+    parent_site = next(c for c in bakery["claims"] if c["field"] == "website.parent_company_site")
+    assert parent_site["value"] == "https://nordlysbakeri.no/"
+    assert parent_site["relationship"] == "parent"
+    assert parent_site["parent_organisation_number"] == "935955211"
+    assert bakery["sections"]["website"]["state"] == "ambiguous"
+    assert not any(c["field"].startswith(("contact.website", "profile.")) for c in bakery["claims"])

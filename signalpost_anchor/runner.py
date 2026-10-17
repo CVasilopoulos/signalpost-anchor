@@ -9,6 +9,7 @@ import shutil
 import sys
 import time
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -68,6 +69,7 @@ def percentile(values: list[float], fraction: float) -> float | None:
 async def run_batch(options: Options, fetcher_factory: Any = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     started_clock = time.monotonic()
     started_at = utc_now()
+    asyncio.get_running_loop().set_default_executor(ThreadPoolExecutor(max_workers=64))
     run_id = options.run_id or "run-" + started_at.replace(":", "").replace("-", "").replace(".", "")[:15]
     hard_deadline = started_clock + max(60.0, options.time_budget - max(45.0, options.time_budget * 0.06))
     raw_records = read_inputs(options.input)

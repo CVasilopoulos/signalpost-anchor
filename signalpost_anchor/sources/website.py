@@ -12,6 +12,7 @@ from ..context import CompanyContext
 from ..http import Fetched, Fetcher, normalise_url
 from ..names import (
     DIRECTORY_DOMAINS,
+    core_tokens as core_tokens_for,
     core_name,
     FREE_MAIL_DOMAINS,
     LEGAL_SUFFIXES,
@@ -24,15 +25,53 @@ from ..names import (
     name_span,
     orgnr_context,
     registered_domain,
+    valid_orgnr,
 )
 from ..robots import RobotsCache
 
 SITE_SOURCE = "Company website"
-SOURCE_PRIORITY = {"registry": 0, "previous": 1, "wikidata": 2, "nav": 3, "subunit_registry": 4, "email": 5, "guess": 6, "subunit_guess": 7}
+SOURCE_PRIORITY = {"registry": 0, "previous": 1, "wikidata": 2, "nav": 3, "subunit_registry": 4, "email": 5, "guess": 6, "subunit_guess": 7, "former_name_guess": 8}
 TRUSTED_SOURCES = ("registry", "previous", "wikidata", "nav", "subunit_registry")
 DEFAULT_PATHS = ("/kontakt", "/om-oss", "/contact", "/about")
+GUESS_SOURCES = ("guess", "subunit_guess", "former_name_guess")
+REGISTRY_LINK_HOSTS = re.compile(r"(^|\.)(brreg\.no|proff\.no|purehelp\.no|regnskapstall\.no|forvalt\.no)$", re.I)
+IDENTITY_LINK_PRIORITY = (
+    re.compile(r"kontakt|contact", re.I),
+    re.compile(r"om[\s\-_]?oss|about|selskapet|firma|company|hvem[\s\-_]er[\s\-_]vi", re.I),
+    re.compile(r"personvern|privacy|vilk[aå]r|betingelser|terms|impressum|imprint|cookie", re.I),
+)
+FOUNDED_PATTERN = re.compile(r"\b(?:etablert|grunnlagt|stiftet|founded|established)\s+(?:i|in)\s+((?:18|19|20)\d{2})\b", re.I)
 NEWS_PATH = re.compile(r"/(nyheter|nyhet|aktuelt|news|blogg|blog|presse|press|artikler|artikkel|articles|insights|innsikt|media|pressemeldinger|arkiv)(/|$)", re.I)
 PARKING_HINTS = re.compile(r"(domain (is )?for sale|domenet er til salgs|this domain (has been|is) registered|dette domenet er registrert|parkert|parked (free|domain)|buy this domain|kjøp dette domenet|website coming soon|under construction|kommer snart|default web page|welcome to nginx|it works!|domeneshop|one\.com - |site not found)", re.I)
+
+
+TEXT_PHONE = re.compile(r"(?<![\wæøå])(?:tlf|telefon|tel|phone|ring|mobil|mob|sentralbord)\.?\s*:?\s*((?:\+47[\s\u00a0]?)?\d{2,3}(?:[\s\u00a0]?\d{2,3}){2,3})(?!\d)", re.I)
+DAY_NAMES = {"monday": "Mo", "tuesday": "Tu", "wednesday": "We", "thursday": "Th", "friday": "Fr", "saturday": "Sa", "sunday": "Su", "publicholidays": "PH"}
+
+
+def opening_hours_text(obj: dict[str, Any]) -> str | None:
+    hours = obj.get("openingHours")
+    if isinstance(hours, str) and re.search(r"\d", hours):
+        return hours.strip()[:200]
+    if isinstance(hours, list):
+        parts = [str(item).strip() for item in hours if isinstance(item, str) and re.search(r"\d", item)]
+        if parts:
+            return "; ".join(parts)[:200]
+    specs = obj.get("openingHoursSpecification")
+    if isinstance(specs, dict):
+        specs = [specs]
+    if isinstance(specs, list):
+        parts = []
+        for spec in specs:
+            if not isinstance(spec, dict) or not spec.get("opens") or not spec.get("closes"):
+                continue
+            days = spec.get("dayOfWeek")
+            days = days if isinstance(days, list) else [days]
+            labels = [DAY_NAMES.get(str(day).rsplit("/", 1)[-1].lower(), str(day).rsplit("/", 1)[-1][:2]) for day in days if day]
+            parts.append(f"{','.join(labels)} {str(spec['opens'])[:5]}-{str(spec['closes'])[:5]}".strip())
+        if parts:
+            return "; ".join(dict.fromkeys(parts))[:200]
+    return None
 
 
 @dataclass
@@ -50,6 +89,7 @@ class Page:
     feeds: list[str] = field(default_factory=list)
     text: str = ""
     orgnrs: set[str] = field(default_factory=set)
+    orgnr_links: dict[str, str] = field(default_factory=dict)
     published: str | None = None
     is_html: bool = True
 
@@ -79,6 +119,12 @@ def parse_page(fetched: Fetched) -> Page:
     page.text = text
     page.emails = extract.mailto_and_text_emails(soup, text)
     page.orgnrs = find_orgnrs(text + " " + footer_text + " " + " ".join(str(item.get(k, "")) for item in page.objects for k in ("vatID", "taxID", "leiCode", "identifier")))
+    for url, _ in page.links:
+        if REGISTRY_LINK_HOSTS.search(urlsplit(url).hostname or ""):
+            for number in re.findall(r"(?<!\d)(\d{9})(?!\d)", url):
+                if valid_orgnr(number):
+                    page.orgnrs.add(number)
+                    page.orgnr_links.setdefault(number, url)
     return page
 
 
@@ -87,7 +133,7 @@ def build_candidates(ctx: CompanyContext, allow_guess: bool) -> list[dict[str, A
     candidates: list[dict[str, Any]] = []
     seen: set[str] = set()
 
-    def add(url: str | None, source: str, detail: str | None = None) -> None:
+    def add(url: str | None, source: str, detail: str | None = None, name_basis: str | None = None) -> None:
         normalised = normalise_url(url or "")
         if not normalised:
             return
@@ -99,7 +145,10 @@ def build_candidates(ctx: CompanyContext, allow_guess: bool) -> list[dict[str, A
             return
         seen.add(domain)
         root = f"{urlsplit(normalised).scheme}://{host}/"
-        candidates.append({"url": normalised if source == "registry" else root, "domain": domain, "source": source, "detail": detail})
+        candidate = {"url": normalised if source == "registry" else root, "domain": domain, "source": source, "detail": detail}
+        if name_basis:
+            candidate["name_basis"] = name_basis
+        candidates.append(candidate)
 
     if entity.get("hjemmeside"):
         add(entity["hjemmeside"], "registry", "Enhetsregisteret hjemmeside")
@@ -127,9 +176,40 @@ def build_candidates(ctx: CompanyContext, allow_guess: bool) -> list[dict[str, A
                 unit_names.append(unit_name)
         for unit_name in unit_names[:3]:
             for domain in guess_domains(unit_name, limit=2):
-                add("https://" + domain, "subunit_guess", f"Domain derived from subunit name {unit_name}")
+                add("https://" + domain, "subunit_guess", f"Domain derived from subunit name {unit_name}", unit_name)
+        former = sorted((item for item in entity.get("historiskeNavn") or [] if item.get("navn")), key=lambda item: str(item.get("tilDato") or ""), reverse=True)
+        for item in former[:1]:
+            if core_name(item["navn"]) == main_core:
+                continue
+            for domain in guess_domains(item["navn"], limit=3):
+                add("https://" + domain, "former_name_guess", f"Domain derived from former name {item['navn']}", item["navn"])
     candidates.sort(key=lambda item: SOURCE_PRIORITY[item["source"]])
     return candidates
+
+
+def registered_parents(ctx: CompanyContext) -> dict[str, str]:
+    parents: dict[str, str] = {}
+    for claim in ctx.ledger.claims:
+        if claim["field"] in ("group.parent", "group.ultimate_parent") and claim.get("parent_organisation_number"):
+            parents[str(claim["parent_organisation_number"])] = str(claim["value"])
+        elif claim["field"] == "identity.parent_organisation_number":
+            parents[str(claim["value"])] = str(claim["value"])
+    return parents
+
+
+def strict_label_match(name: str, domain: str) -> bool:
+    label = domain.split(".")[0].lower().replace("-", "")
+    if label.startswith("xn--"):
+        try:
+            label = label.encode("ascii").decode("idna")
+        except UnicodeError:
+            return False
+    full = [part.lower() for part in core_tokens_for(name) if part.lower() != "og"]
+    options = set()
+    for table in (TRANSLIT, None):
+        joined = "".join(part.translate(table) if table else part for part in full)
+        options.add(re.sub(r"[^a-z0-9æøå]", "", joined))
+    return bool(full) and len(label) >= 5 and label in options
 
 
 def assessment_previous_ok(name_on_text: bool, phone_match: bool, address_match: bool, label_match: bool) -> bool:
@@ -190,12 +270,21 @@ class WebsiteResearcher:
             matched = org if orgnr_page else sorted(page.orgnrs & (related - {org}))[0]
             span = orgnr_context(page.text, matched) or matched
             method = "organisation_number_on_site" if orgnr_page else "subunit_organisation_number_on_site"
+            if matched in page.orgnr_links and not orgnr_context(page.text, matched):
+                span = page.orgnr_links[matched]
             result.update(verified=True, method=method, page=page, span=span)
             result["signals"].append("organisation_number" if orgnr_page else f"subunit_organisation_number {matched}")
+            if matched in page.orgnr_links:
+                result["signals"].append("registry_link_with_organisation_number")
             if len(all_orgnrs) > 4:
                 result["signals"].append(f"{len(all_orgnrs)} distinct organisation numbers on site")
                 if not name_in_text(name, texts):
                     result.update(verified=False, method=None, conflict="site lists many organisation numbers and does not name the company")
+            elif candidate["source"] in GUESS_SOURCES + ("email",) and all_orgnrs - related:
+                head_text = " ".join(filter(None, [pages[0].title, pages[0].site_name] + [str(obj.get("name", "")) + " " + str(obj.get("legalName", "")) for item in pages for obj in extract.org_objects(item.objects)]))
+                if not name_in_text(name, head_text):
+                    result["signals"].append("other organisation numbers on site")
+                    result.update(verified=False, method=None, conflict=f"derived domain also shows organisation number(s) {', '.join(sorted(all_orgnrs - related)[:3])} and its title does not name the company")
             return result
         title_text = " ".join(filter(None, [pages[0].title, pages[0].site_name] + [str(obj.get("name", "")) + " " + str(obj.get("legalName", "")) for page in pages for obj in extract.org_objects(page.objects)]))
         name_on_title = name_in_text(name, title_text)
@@ -217,8 +306,12 @@ class WebsiteResearcher:
         label_match = domain_label_matches(name, candidate["domain"])
         if label_match:
             result["signals"].append("domain_matches_name")
-        if other and not (name_on_title and (phone_match or address_match)):
+        if other and (source in GUESS_SOURCES + ("email",) or not (name_on_title and (phone_match or address_match))):
             result["conflict"] = f"site shows organisation number(s) {', '.join(other[:3])} but not {org}"
+            parents = registered_parents(ctx)
+            owner = next((number for number in other if number in parents), None)
+            if owner:
+                result["parent_site"] = {"organisation_number": owner, "name": parents[owner], "page": next(page for page in pages if owner in page.orgnrs)}
             return result
         if PARKING_HINTS.search((pages[0].title or "") + " " + pages[0].text[:600]) and not name_on_text:
             result["conflict"] = "parked or placeholder page"
@@ -240,10 +333,14 @@ class WebsiteResearcher:
                 result.update(verified=True, method=f"{source}_listed_and_{'name' if name_on_text else 'address'}_match", page=span_page, span=span or (pages[0].title or ""))
             elif phone_match or address_match:
                 result["conflict"] = "registered phone or address appears but the company name does not (likely a manager, accountant or group site)"
+            elif label_match and strict_label_match(name, candidate["domain"]):
+                result.update(verified=True, method=f"{source}_listed_and_domain_matches_name", page=pages[0], span=pages[0].fetched.final_url)
             return result
         if source == "email":
             if (name_on_text and (label_match or phone_match or address_match)) or (phone_match and address_match):
                 result.update(verified=True, method="registry_email_domain_and_name_match", page=span_page, span=span or (pages[0].title or ""))
+            elif label_match and strict_label_match(name, candidate["domain"]):
+                result.update(verified=True, method="registry_email_domain_matches_name", page=pages[0], span=pages[0].fetched.final_url)
             return result
         if source == "guess":
             if name_on_title and label_match and (phone_match or address_match):
@@ -266,12 +363,13 @@ class WebsiteResearcher:
             return
         registry_outcome = None
         blocked_reason = None
+        assessed: set[str] = set()
         for candidate in candidates:
             if time.monotonic() > deadline:
                 ctx.website_candidates.append({**candidate, "outcome": "skipped", "reason": "time budget exhausted"})
                 continue
             host = urlsplit(candidate["url"]).hostname or ""
-            if candidate["source"] in ("guess", "email", "subunit_guess"):
+            if candidate["source"] in GUESS_SOURCES + ("email",):
                 resolvable, reason = await self.fetcher.resolve_public(host)
                 if not resolvable and not host.startswith("www."):
                     www_ok, _ = await self.fetcher.resolve_public("www." + host)
@@ -290,14 +388,21 @@ class WebsiteResearcher:
                     blocked_reason = f"{candidate['domain']}: {error}"
                 ctx.website_candidates.append({**candidate, "outcome": outcome, "reason": error})
                 if candidate["source"] in ("registry", "previous"):
-                    transient = bool(error) and not (error.startswith("dns") or error.startswith("HTTP 4") or "robots" in error)
+                    transient = bool(error) and not ((error.startswith("dns") and "Timeout" not in error) or error.startswith("HTTP 4") or "robots" in error)
                     registry_outcome = "failed" if transient else (registry_outcome or outcome)
                 continue
             final_domain = registered_domain(urlsplit(home.fetched.final_url).hostname or "")
             if final_domain != candidate["domain"] and candidate["source"] not in ("registry", "previous"):
-                if final_domain in DIRECTORY_DOMAINS or candidate["source"] in ("guess", "subunit_guess"):
+                follow = candidate["source"] in GUESS_SOURCES and final_domain not in DIRECTORY_DOMAINS and final_domain not in assessed and domain_label_matches(ctx.name if candidate["source"] == "guess" else candidate.get("name_basis") or ctx.name, final_domain)
+                if follow:
+                    candidate = {**candidate, "domain": final_domain, "detail": f"{candidate.get('detail')}; redirected from {candidate['domain']}", "redirected_from": candidate["domain"]}
+                elif final_domain in DIRECTORY_DOMAINS or candidate["source"] in GUESS_SOURCES:
                     ctx.website_candidates.append({**candidate, "outcome": "rejected", "reason": f"redirects to {final_domain}"})
                     continue
+            if candidate["domain"] in assessed:
+                ctx.website_candidates.append({**candidate, "outcome": "skipped", "reason": "domain already assessed"})
+                continue
+            assessed.add(candidate["domain"])
             pages = [home]
             assessment = self.assess(ctx, candidate, pages)
             if not assessment["verified"] and not assessment.get("conflict"):
@@ -317,6 +422,14 @@ class WebsiteResearcher:
                 await self._publish(ctx, candidate, pages, assessment, deadline)
                 return
             record.update(outcome="rejected", reason=assessment.get("conflict") or "identity not confirmed")
+            parent_site = assessment.get("parent_site")
+            if parent_site and not ctx.ledger.first_value("website.parent_company_site"):
+                record["outcome"] = "parent_company_site"
+                page = parent_site["page"]
+                span = orgnr_context(page.text, parent_site["organisation_number"]) or page.orgnr_links.get(parent_site["organisation_number"]) or parent_site["organisation_number"]
+                ev = ctx.ledger.evidence_for(page.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="text", span=span, method="parent_organisation_number_on_site")
+                site_root = f"{urlsplit(home.fetched.final_url).scheme}://{urlsplit(home.fetched.final_url).netloc}/"
+                ctx.ledger.claim("website", "website.parent_company_site", site_root, [ev], label=f"Website of registered parent {parent_site['name']} (not the company's own site)", method="parent_organisation_number_on_site", relationship="parent", confidence=0.9, extra={"parent_organisation_number": parent_site["organisation_number"]})
             ctx.website_candidates.append(record)
             if candidate["source"] == "registry":
                 registry_outcome = "unconfirmed"
@@ -327,6 +440,9 @@ class WebsiteResearcher:
             ledger.section("website", "blocked", f"Website refused automated access: {blocked_reason}", sources=[SITE_SOURCE])
         elif registry_outcome == "failed":
             ledger.section("website", "failed", "Registry-listed or previously verified website timed out or refused the connection in this run", sources=[SITE_SOURCE])
+        elif any(c.get("outcome") == "parent_company_site" for c in ctx.website_candidates):
+            parent = next(c for c in ctx.website_candidates if c.get("outcome") == "parent_company_site")
+            ledger.section("website", "ambiguous", f"Only the registered parent's website was found ({parent.get('final_url') or parent['url']}); it is published as the parent's site, not as this company's", sources=[SITE_SOURCE])
         elif registry_outcome == "unreachable":
             ledger.section("website", "not_available", "Registry-listed website did not resolve or returned an error; no other candidate verified", sources=[SITE_SOURCE])
         else:
@@ -334,14 +450,21 @@ class WebsiteResearcher:
 
     def _identity_pages(self, home: Page) -> list[str]:
         host = urlsplit(home.fetched.final_url).hostname
-        urls = []
-        for url, text in home.links:
+        ranked: list[tuple[int, int, str]] = []
+        for position, (url, text) in enumerate(home.links):
             if urlsplit(url).hostname != host:
                 continue
-            if extract.CONTACT_HINTS.search(text) or extract.CONTACT_HINTS.search(urlsplit(url).path):
+            path = urlsplit(url).path
+            if extract.CONTACT_HINTS.search(text) or extract.CONTACT_HINTS.search(path) or IDENTITY_LINK_PRIORITY[2].search(text + " " + path):
                 cleaned = url.split("?")[0]
-                if cleaned not in urls and cleaned.rstrip("/") != home.fetched.final_url.rstrip("/"):
-                    urls.append(cleaned)
+                if cleaned.rstrip("/") == home.fetched.final_url.rstrip("/"):
+                    continue
+                rank = next((index for index, pattern in enumerate(IDENTITY_LINK_PRIORITY) if pattern.search(text + " " + path)), len(IDENTITY_LINK_PRIORITY))
+                ranked.append((rank, position, cleaned))
+        urls: list[str] = []
+        for _, _, cleaned in sorted(ranked):
+            if cleaned not in urls:
+                urls.append(cleaned)
         base = f"{urlsplit(home.fetched.final_url).scheme}://{host}"
         for path in DEFAULT_PATHS:
             if not urls or len(urls) < 2:
@@ -383,6 +506,7 @@ class WebsiteResearcher:
         self._publish_contacts(ctx, pages, domain)
         self._publish_structured(ctx, pages)
         self._publish_hiring(ctx, pages, domain)
+        self._publish_site_facts(ctx, pages, home)
         await self._publish_activity(ctx, pages, domain, deadline)
         ledger.section("website", "available", f"Verified via {assessment['method'].replace('_', ' ')}", sources=[SITE_SOURCE], checked_at=home.fetched.retrieved_at)
 
@@ -454,7 +578,9 @@ class WebsiteResearcher:
     def _handle_matches(url: str, tokens: set[str]) -> bool:
         handle = re.sub(r"[^a-z0-9æøå]", "", unquote(extract.profile_handle(url)).lower())
         plain = handle.translate(TRANSLIT)
-        return any(token in handle or token in plain for token in tokens)
+        if any(token in handle or token in plain for token in tokens):
+            return True
+        return len(plain) >= 8 and any(token.startswith(plain) for token in tokens)
 
     @staticmethod
     def _opaque_handle(url: str) -> bool:
@@ -561,6 +687,110 @@ class WebsiteResearcher:
                             ev = ledger.evidence_for(page.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="json-ld sameAs", span=url, method="json_ld")
                             ledger.claim("company_profiles", f"profile.{platform}", cleaned, [ev], key=f"profile.{platform}.{cleaned.lower()}", label=f"{platform.capitalize()} profile declared in website structured data", method="json_ld", confidence=0.95, relationship="company_owned_profile")
                             ledger.section("company_profiles", "available", None, sources=[SITE_SOURCE])
+
+    def _publish_site_facts(self, ctx: CompanyContext, pages: list[Page], home: Page) -> None:
+        ledger = ctx.ledger
+
+        def evidence(page: Page, locator: str, span: str, method: str) -> str:
+            return ledger.evidence_for(page.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator=locator, span=span, method=method)
+
+        brand = ledger.first_value("identity.public_brand")
+        hours_done = False
+        offers: list[tuple[str, Page]] = []
+        for page in pages:
+            for obj in page.objects:
+                types = extract.types_of(obj)
+                if types & extract.ORG_TYPES:
+                    name = obj.get("legalName") or obj.get("name")
+                    if isinstance(name, str) and not (name_in_text(ctx.name, name) or name_in_text(name, ctx.name)) and not brand:
+                        continue
+                    if not hours_done:
+                        hours = opening_hours_text(obj)
+                        if hours:
+                            ledger.claim("workplaces", "location.opening_hours", hours, [evidence(page, "json-ld openingHours", hours, "json_ld")], label="Opening hours published on verified website", method="json_ld", confidence=0.9)
+                            hours_done = True
+                    for key, field, label in (("telephone", "contact.website_phone", "Phone in website structured data"), ("email", "contact.website_email", "Email in website structured data")):
+                        value = obj.get(key)
+                        if isinstance(value, str) and value.strip():
+                            value = value.strip().removeprefix("mailto:").removeprefix("tel:")
+                            dedupe = extract.digits_only(value) if key == "telephone" else value.lower()
+                            if key == "email" and not extract.EMAIL_PATTERN.fullmatch(value):
+                                continue
+                            if key == "telephone" and not 8 <= len(dedupe) <= 13:
+                                continue
+                            known = {extract.digits_only(str(claim["value"])) if key == "telephone" else str(claim["value"]).lower() for claim in ledger.claims if claim["field"] == field}
+                            if dedupe in known:
+                                continue
+                            ledger.claim("contact", field, value, [evidence(page, f"json-ld {key}", value, "json_ld")], key=f"{field}.{dedupe}", label=label, method="json_ld", confidence=0.92)
+                            ledger.section("contact", "available", None, sources=[SITE_SOURCE])
+                if types & {"Service", "Product"}:
+                    name = obj.get("name")
+                    if isinstance(name, str) and 3 <= len(name.strip()) <= 120 and all(name.strip().lower() != existing.lower() for existing, _ in offers):
+                        offers.append((name.strip(), page))
+        for name, page in offers[:10]:
+            ledger.claim("website", "website.offering", name, [evidence(page, "json-ld Service/Product name", name, "json_ld")], key=f"website.offering.{name.lower()[:80]}", label="Product or service listed on verified website", method="json_ld", confidence=0.88)
+        phones_seen = {extract.digits_only(str(claim["value"])) for claim in ledger.claims if claim["field"] == "contact.website_phone"}
+        added = 0
+        for page in pages:
+            for match in TEXT_PHONE.finditer(page.text):
+                digits = extract.digits_only(match.group(1))
+                if len(digits) != 8 or digits in phones_seen or digits[0] not in "2345679" or added >= 2:
+                    continue
+                span = re.sub(r"\s+", " ", match.group(0)).strip()
+                ledger.claim("contact", "contact.website_phone", match.group(1).strip(), [evidence(page, "text", span, "phone_label_on_verified_site")], key=f"contact.website_phone.{digits}", label="Phone on verified website", method="phone_label_on_verified_site", confidence=0.9)
+                ledger.section("contact", "available", None, sources=[SITE_SOURCE])
+                phones_seen.add(digits)
+                added += 1
+        street, postcode = _street_tokens(ctx)
+        if street and postcode:
+            for page in pages:
+                lower = page.text.lower()
+                position = lower.find(street)
+                if position >= 0 and postcode in page.text[position: position + len(street) + 60]:
+                    span = re.sub(r"\s+", " ", page.text[position: position + len(street) + 40]).strip()
+                    address = ledger.first_value("location.business_address")
+                    if address:
+                        ledger.claim("workplaces", "location.website_address", address, [evidence(page, "text", span, "registered_address_on_verified_site")], key=f"location.website_address.{str(address).lower()}", label="Registered business address shown on verified website", method="registered_address_on_verified_site", confidence=0.93)
+                    break
+        people_done = 0
+        seen_people: set[str] = set()
+        for role in ctx.roles:
+            if role.get("type") != "person" or people_done >= 8:
+                continue
+            holder = str(role.get("holder") or "")
+            parts = [part for part in holder.split() if part]
+            if len(parts) < 2 or holder.lower() in seen_people:
+                continue
+            middle = "".join(r"(?:\s+(?:" + re.escape(part) + "|" + re.escape(part[0]) + r"\.?))?" for part in parts[1:-1])
+            pattern = re.compile(r"(?<![\wæøå])" + re.escape(parts[0]) + middle + r"\s+" + re.escape(parts[-1]) + r"(?![\wæøå])", re.I)
+            for page in pages:
+                match = pattern.search(page.text)
+                if match and len(match.group(0)) <= len(holder) + 25:
+                    start = max(0, match.start() - 50)
+                    span = re.sub(r"\s+", " ", page.text[start: match.end() + 60]).strip()
+                    ledger.claim("leadership", "leadership.named_on_website", f"{holder} ({role.get('label')})", [evidence(page, "text", span, "registry_role_holder_on_verified_site")], key=f"leadership.named_on_website.{holder.lower()}", label="Registry role holder named on verified website", method="registry_role_holder_on_verified_site", confidence=0.9, extra={"role_code": role.get("code"), "registry_role": role.get("label")})
+                    seen_people.add(holder.lower())
+                    people_done += 1
+                    break
+        for page in pages:
+            for match in FOUNDED_PATTERN.finditer(page.text):
+                start = max(0, match.start() - 120)
+                sentence = page.text[start: match.end() + 60]
+                if not re.search(r"(?<![\wæøå])(vi|selskapet|firmaet|bedriften|foretaket|virksomheten|company|we|our)(?![\wæøå])", sentence, re.I) and not name_in_text(ctx.name, sentence):
+                    continue
+                year = match.group(1)
+                if year > str(date.today().year):
+                    continue
+                span = re.sub(r"\s+", " ", page.text[max(0, match.start() - 60): match.end() + 40]).strip()
+                ledger.claim("legal_identity", "identity.website_founded_year", year, [evidence(page, "text", span, "founding_statement_on_verified_site")], label="Founding year stated on verified website", method="founding_statement_on_verified_site", as_of=None, confidence=0.85)
+                break
+            else:
+                continue
+            break
+        for page in pages[1:]:
+            if page.description and len(page.description) >= 40 and page.description != home.description and re.search(r"(om[\s\-_]?oss|about|selskapet|hvem)", urlsplit(page.fetched.final_url).path, re.I):
+                ledger.claim("website", "website.about_description", page.description[:600], [evidence(page, "meta[name=description]", page.description, "html_metadata")], label="About-page description on company website (company-owned copy)", method="html_metadata", confidence=0.88)
+                break
 
     def _publish_hiring(self, ctx: CompanyContext, pages: list[Page], domain: str) -> None:
         ledger = ctx.ledger

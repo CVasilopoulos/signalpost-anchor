@@ -182,7 +182,12 @@ def build_synthesis(ctx: CompanyContext, changes: list[dict[str, Any]] | None = 
         leaders.append(f"external accountant {accountant[0]['value']}")
         lead_ids.append(accountant[0]["id"])
     if leaders:
-        add("leadership", "The official roles register lists " + "; ".join(leaders) + ".", lead_ids)
+        text = "The official roles register lists " + "; ".join(leaders) + "."
+        named = _claims(ctx, "leadership.named_on_website")
+        if named:
+            text += f" The verified website names {len(named)} of these role holder{'s' if len(named) != 1 else ''} ({', '.join(str(claim['value']) for claim in named[:3])})."
+            lead_ids += [claim["id"] for claim in named[:3]]
+        add("leadership", text, lead_ids)
 
     footprint = []
     foot_ids = []
@@ -208,6 +213,10 @@ def build_synthesis(ctx: CompanyContext, changes: list[dict[str, Any]] | None = 
     if news:
         footprint.append(f"{len(news)} dated website item{'s' if len(news) != 1 else ''}, latest {news[0].get('as_of')}: “{news[0]['value'][:90]}”")
         foot_ids += [claim["id"] for claim in news[:5]]
+    hours = _claims(ctx, "location.opening_hours")
+    if hours:
+        footprint.append(f"opening hours on the website: {hours[0]['value']}")
+        foot_ids.append(hours[0]["id"])
     lei = _claims(ctx, "identifier.lei")
     if lei:
         footprint.append(f"LEI {lei[0]['value']}")
@@ -294,6 +303,8 @@ def _signals(ctx: CompanyContext, years: list[str]) -> list[dict[str, Any]]:
 def _unknowns(ctx: CompanyContext) -> list[dict[str, Any]]:
     items = []
     for name, section in ctx.ledger.sections.items():
+        if section["state"] == "not_available" and name != "website" and ctx.ledger.claims_for(name):
+            continue
         if section["state"] != "available":
             items.append({"section": name, "label": SECTION_LABELS.get(name, name), "state": section["state"], "reason": "; ".join(section.get("notes", [])) or None})
     return items
