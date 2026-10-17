@@ -107,3 +107,15 @@ def test_role_holder_on_site_needs_their_own_middle_names_or_none():
     WebsiteResearcher(None, None)._publish_site_facts(ctx, [page], page)
     named = [claim["value"] for claim in ctx.ledger.claims if claim["field"] == "leadership.named_on_website"]
     assert named == ["Marius Alexander Skovli (Styrets leder)"]
+
+
+def test_identity_pages_take_one_contact_one_privacy_one_about_first():
+    from signalpost_anchor.sources.website import WebsiteResearcher
+
+    html = """<html><body>
+    <a href="/kontakt/oslo">Kontakt Oslo</a><a href="/kontakt/bergen">Kontakt Bergen</a><a href="/kontakt/narvik">Kontakt Narvik</a>
+    <a href="/om-oss">Om oss</a><a href="/personvernerklaering">Personvernerklæring</a><a href="/advokatfirmaet-vart">Advokatfirmaet</a>
+    </body></html>"""
+    urls = WebsiteResearcher(None, None)._identity_pages(page_from(html, "https://www.example.no/"))
+    assert urls[:3] == ["https://www.example.no/kontakt/oslo", "https://www.example.no/personvernerklaering", "https://www.example.no/om-oss"]
+    assert len(urls) == 4

@@ -37,8 +37,8 @@ GUESS_SOURCES = ("guess", "subunit_guess", "former_name_guess")
 REGISTRY_LINK_HOSTS = re.compile(r"(^|\.)(brreg\.no|proff\.no|purehelp\.no|regnskapstall\.no|forvalt\.no)$", re.I)
 IDENTITY_LINK_PRIORITY = (
     re.compile(r"kontakt|contact", re.I),
-    re.compile(r"om[\s\-_]?oss|about|selskapet|firma|company|hvem[\s\-_]er[\s\-_]vi", re.I),
-    re.compile(r"personvern|privacy|vilk[aå]r|betingelser|terms|impressum|imprint|cookie", re.I),
+    re.compile(r"personvern|privacy|vilk[aå]r|betingelser|terms|impressum|imprint|firma[\s\-_]?info|faktura|selskapsinfo|company[\s\-_]info", re.I),
+    re.compile(r"om[\s\-_]?oss|about|selskapet|(?<![a-zæøå])firma(et)?(?![a-zæøå])|company|hvem[\s\-_]er[\s\-_]vi|cookie", re.I),
 )
 FOUNDED_PATTERN = re.compile(r"\b(?:etablert|grunnlagt|stiftet|founded|established)\s+(?:i|in)\s+((?:18|19|20)\d{2})\b", re.I)
 NEWS_PATH = re.compile(r"/(nyheter|nyhet|aktuelt|news|blogg|blog|presse|press|artikler|artikkel|articles|insights|innsikt|media|pressemeldinger|arkiv)(/|$)", re.I)
@@ -285,6 +285,8 @@ class WebsiteResearcher:
                 if not name_in_text(name, head_text):
                     result["signals"].append("other organisation numbers on site")
                     result.update(verified=False, method=None, conflict=f"derived domain also shows organisation number(s) {', '.join(sorted(all_orgnrs - related)[:3])} and its title does not name the company")
+                    if orgnr_page:
+                        result["group_site"] = {"page": page, "span": span, "others": sorted(all_orgnrs - related)[:5]}
             return result
         title_text = " ".join(filter(None, [pages[0].title, pages[0].site_name] + [str(obj.get("name", "")) + " " + str(obj.get("legalName", "")) for page in pages for obj in extract.org_objects(page.objects)]))
         name_on_title = name_in_text(name, title_text)
@@ -407,7 +409,7 @@ class WebsiteResearcher:
             assessment = self.assess(ctx, candidate, pages)
             if not assessment["verified"] and not assessment.get("conflict"):
                 for url in self._identity_pages(home):
-                    if len(pages) >= 4 or time.monotonic() > deadline:
+                    if len(pages) >= 5 or time.monotonic() > deadline:
                         break
                     page, _ = await self.fetch_page(url, deadline)
                     if page:
@@ -422,6 +424,12 @@ class WebsiteResearcher:
                 await self._publish(ctx, candidate, pages, assessment, deadline)
                 return
             record.update(outcome="rejected", reason=assessment.get("conflict") or "identity not confirmed")
+            group_site = assessment.get("group_site")
+            if group_site and not ctx.ledger.first_value("website.group_brand_site"):
+                record["outcome"] = "group_brand_site"
+                ev = ctx.ledger.evidence_for(group_site["page"].fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="text", span=group_site["span"], method="organisation_number_on_shared_site")
+                site_root = f"{urlsplit(home.fetched.final_url).scheme}://{urlsplit(home.fetched.final_url).netloc}/"
+                ctx.ledger.claim("website", "website.group_brand_site", site_root, [ev], label="Shared group or brand website that lists this company's organisation number (not the company's own site)", method="organisation_number_on_shared_site", relationship="group_brand", confidence=0.9, extra={"other_organisation_numbers": group_site["others"]})
             parent_site = assessment.get("parent_site")
             if parent_site and not ctx.ledger.first_value("website.parent_company_site"):
                 record["outcome"] = "parent_company_site"
@@ -440,6 +448,9 @@ class WebsiteResearcher:
             ledger.section("website", "blocked", f"Website refused automated access: {blocked_reason}", sources=[SITE_SOURCE])
         elif registry_outcome == "failed":
             ledger.section("website", "failed", "Registry-listed or previously verified website timed out or refused the connection in this run", sources=[SITE_SOURCE])
+        elif any(c.get("outcome") == "group_brand_site" for c in ctx.website_candidates):
+            shared = next(c for c in ctx.website_candidates if c.get("outcome") == "group_brand_site")
+            ledger.section("website", "ambiguous", f"Only a shared group or brand website was found ({shared.get('final_url') or shared['url']}); it lists this organisation number among others and is published as a group site, not as this company's", sources=[SITE_SOURCE])
         elif any(c.get("outcome") == "parent_company_site" for c in ctx.website_candidates):
             parent = next(c for c in ctx.website_candidates if c.get("outcome") == "parent_company_site")
             ledger.section("website", "ambiguous", f"Only the registered parent's website was found ({parent.get('final_url') or parent['url']}); it is published as the parent's site, not as this company's", sources=[SITE_SOURCE])
@@ -462,7 +473,12 @@ class WebsiteResearcher:
                 rank = next((index for index, pattern in enumerate(IDENTITY_LINK_PRIORITY) if pattern.search(text + " " + path)), len(IDENTITY_LINK_PRIORITY))
                 ranked.append((rank, position, cleaned))
         urls: list[str] = []
-        for _, _, cleaned in sorted(ranked):
+        ordered = sorted(ranked)
+        for rank in range(len(IDENTITY_LINK_PRIORITY)):
+            first = next((cleaned for item_rank, _, cleaned in ordered if item_rank == rank and cleaned not in urls), None)
+            if first:
+                urls.append(first)
+        for _, _, cleaned in ordered:
             if cleaned not in urls:
                 urls.append(cleaned)
         base = f"{urlsplit(home.fetched.final_url).scheme}://{host}"

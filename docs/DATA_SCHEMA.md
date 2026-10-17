@@ -52,7 +52,7 @@ States: `available` (facts published), `not_available` (source checked, nothing 
 }
 ```
 
-`key` is stable across runs and drives refresh. `relationship` is `exact_entity`, `registered_subunit` (for example a job ad posted by a registered subunit), `parent` or `company_owned_profile`. Claims carried forward from a previous run when their source failed have `stale: true` and `stale_reason`.
+`key` is stable across runs and drives refresh. `relationship` is `exact_entity`, `registered_subunit` (for example a job ad posted by a registered subunit), `parent` (including `website.parent_company_site`), `group_brand` (`website.group_brand_site`, a shared site listing several organisation numbers), `subsidiary`, `ultimate_parent` or `company_owned_profile`. Claims carried forward from a previous run when their source failed have `stale: true` and `stale_reason`.
 
 Field families: `identity.*`, `financials.*`, `leadership.*`, `location.*`, `website.*`, `profile.<platform>`, `hiring.*`, `activity.*`, `contact.*`, `identifier.*`.
 
