@@ -8,7 +8,8 @@ For each company the new claims are compared with the previous run by stable cla
 |---|---|
 | same key, same value | unchanged; `first_observed_at` carried over, no change record (idempotent) |
 | same key, new value | change record with previous and current value, both claim ids and both evidence sets; the old claim and its evidence move to `history` |
-| new key, section was checked last time | `new_*` change (for example `new_role`, `new_job`, `new_location`, `new_filing`, `new_activity`) |
+| new key, its section and its source were both checked last time | `new_*` change (for example `new_role`, `new_job`, `new_location`, `new_filing`, `new_activity`) |
+| new key from a source that was not checked last time (for example the rate-limited filed-copy lookup reaching a company for the first time) | counted as added, no change record |
 | key gone, source checked successfully this run | `removed_*` / `closed_job` change; old claim and evidence kept in `history` |
 | key gone, source failed or timed out this run | previous claim carried forward with `stale: true` and the reason; no false removal |
 

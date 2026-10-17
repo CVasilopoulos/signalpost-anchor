@@ -103,6 +103,7 @@ def apply_refresh(envelope: dict[str, Any], previous: dict[str, Any] | None) -> 
     history: list[dict[str, Any]] = list(previous.get("history", []))
     evidence_index = {item["id"]: item for item in envelope["evidence"]}
     unchanged = added = removed = changed = carried = 0
+    previous_checked = set(previous.get("sources_checked") or [])
 
     def keep_evidence(claim: dict[str, Any]) -> list[dict[str, Any]]:
         return [previous_evidence[eid] for eid in claim.get("evidence_ids", []) if eid in previous_evidence]
@@ -112,7 +113,8 @@ def apply_refresh(envelope: dict[str, Any], previous: dict[str, Any] | None) -> 
         if old is None:
             prior_section = previous.get("sections", {}).get(claim["section"], {}).get("state")
             added += 1
-            if prior_section in RELIABLE_REMOVAL_STATES and previous_run.get("run_id"):
+            source_seen = not previous_checked or (claim.get("source_id") or "unknown") in previous_checked
+            if prior_section in RELIABLE_REMOVAL_STATES and previous_run.get("run_id") and source_seen:
                 kind = _change_type(claim["field"], "new")
                 changes.append(_change(kind, claim, None, None, now, previous_run))
             continue

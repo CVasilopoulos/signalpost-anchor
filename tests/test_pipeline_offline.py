@@ -280,3 +280,22 @@ def test_derived_domain_showing_the_parents_number_is_labelled_not_collapsed(tmp
     assert parent_site["parent_organisation_number"] == "935955211"
     assert bakery["sections"]["website"]["state"] == "ambiguous"
     assert not any(c["field"].startswith(("contact.website", "profile.")) for c in bakery["claims"])
+
+
+def test_facts_from_a_source_not_checked_last_time_are_not_reported_as_new(tmp_path):
+    out = tmp_path / "out"
+    batch = tmp_path / "batch.jsonl"
+    batch.write_text(json.dumps({"organisation_number": ORG}) + "\n", encoding="utf-8")
+
+    def factory(**kwargs):
+        return Fetcher(transport=httpx.MockTransport(world({})), resolver=lambda host: (True, None), **kwargs)
+
+    first_options = Options(input=batch, output=out, time_budget=300, site=False, snapshots=False, filing_years=False, nav_lookback_days=5)
+    first, _ = asyncio.run(run_batch(first_options, fetcher_factory=factory))
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "envelopes.jsonl").write_text("".join(json.dumps(e, ensure_ascii=False) + "\n" for e in first), encoding="utf-8")
+    assert "financials.filed_copy" not in fields(by_org(first)[ORG])
+    second, _ = run_world(tmp_path, {}, [ORG], out)
+    envelope = by_org(second)[ORG]
+    assert "financials.filed_copy" in fields(envelope)
+    assert not any(change["field"].startswith("financials.filed_copy") for change in envelope["changes"])
