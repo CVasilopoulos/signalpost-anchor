@@ -81,23 +81,63 @@ How identities are proven: [docs/IDENTITY_RESOLUTION.md](docs/IDENTITY_RESOLUTIO
 
 ## 100-company smoke test
 
-Run from a clean clone at commit `a31ae4f` in a fresh `python:3.12-slim` container (6 CPUs, 6 GB), only `pip install -r requirements.txt` before the run command:
+Run from a clean clone at commit `184c4a1` in a fresh `python:3.12-slim` container (6 CPUs, 6 GB, unprivileged user), only `pip install -r requirements.txt` before the run command:
 
 | Result | Value |
 |---|---|
 | Envelopes | 100 / 100, all terminal, validation passed |
-| Claims | 12,070 (121 per company), every one with source URL, retrieval time, SHA-256, locator and excerpt |
+| Claims | 12,084 (121 per company), every one with source URL, retrieval time, SHA-256, locator and excerpt |
 | Companies with accounts / roles / workplaces / registry activity | 96 / 96 / 90 / 97 |
-| Verified official website | 27 (12 by organisation number on the site) |
-| Company-owned profiles / contact details / LEI | 18 / 68 / 13 |
-| Wall-clock runtime | 104 s (p50 6.3 s, p95 27.4 s per company) |
-| Requests | 1,465 |
+| Verified official website | 28 (12 by organisation number on the site) |
+| Company-owned profiles / contact details / LEI | 15 / 68 / 13 |
+| Single job ads / dated website news | 2 / 5 |
+| Items found but withheld by a publication rule | 126 (`reports/smoke-withheld.jsonl`) |
+| Wall-clock runtime | 109 s (p50 6.4 s, p95 24.9 s per company) |
+| Requests | 1,448 |
 | Third-party cost / model calls | USD 0 / 0 |
-| Refresh re-run on a copy of the output | 0 change records (idempotent), 104 s |
+| Refresh re-run on a copy of the output | 0 change records (idempotent), 102 s |
+| Test suite in the same kind of clean container | 68 passed |
 
 Full report with the per-company table: [reports/SMOKE_TEST.md](reports/SMOKE_TEST.md); machine-readable reports: `reports/smoke-run-report.json`, `reports/smoke-refresh-run-report.json`; the envelopes themselves: `reports/smoke-envelopes.jsonl.gz`. The batch (`reports/smoke-100-companies.jsonl`) mixes size bands and legal forms from the public universe with bankrupt, liquidating, deleted and sole-proprietorship entities from the live register.
 
-A 1,000-company random sample from the public universe (`reports/sample-1000-companies.jsonl`) completed in 460 s with 1,000/1,000 envelopes and 105,665 claims from the same clean clone; report: `reports/sample-1000-run-report.json`.
+A 1,000-company random sample from the public universe (`reports/sample-1000-companies.jsonl`) completed in 504 s with 1,000/1,000 envelopes and 105,643 claims from the same clean clone; report: `reports/sample-1000-run-report.json`.
+
+### Revision 2 (1.2.0) against revision 1 (1.1.0, `1bfd04a`)
+
+Revision 2 answers Builderr's audit of revision 1: the website must be the company's own, social accounts must be the company's, news must be real dated posts, jobs must be single ads for the company. Each check is a rule (details in [docs/IDENTITY_RESOLUTION.md](docs/IDENTITY_RESOLUTION.md)) and every item a rule holds back is written to `withheld.jsonl`.
+
+Both versions were measured on 2026-10-23 on the smoke batch, the random 100 and the 1,000 sample, in two ways. Replay: 1.1.0 ran live with every HTTP response recorded, then 1.2.0 ran against the same recorded responses, so the differences come from the rules alone. Live: both versions ran from clean clones against the live sources, a few hours apart (companies with at least one fact / facts):
+
+| Field family | Smoke 100, replay | Smoke 100, live | Random 100, live | 1,000, replay | 1,000, live |
+|---|---|---|---|---|---|
+| Verified website (company's own) | 29 → 29 | 29 → 28 | 10 → 10 | 121 → 103 | 121 → 106 |
+| Company-owned profiles | 19 / 41 → 16 / 36 | 19 / 41 → 15 / 34 | 6 / 8 → 6 / 8 | 75 / 161 → 61 / 117 | 75 / 161 → 62 / 118 |
+| Website news | 7 / 38 → 6 / 37 | 7 / 38 → 5 / 36 | 1 / 1 → 1 / 1 | 33 / 201 → 18 / 109 | 33 / 201 → 19 / 113 |
+| Job ads | 2 / 2 → 2 / 2 | 2 / 2 → 2 / 2 | 0 → 0 | 4 / 8 → 4 / 8 | 4 / 8 → 4 / 8 |
+| Any hiring claim (1.1.0 counted careers pages and portal links) | 12 / 16 → 2 / 4 | 12 / 16 → 2 / 4 | 0 → 0 | 29 / 37 → 4 / 12 | 29 / 37 → 4 / 12 |
+| Contact details read from the website | 24 / 60 → 24 / 60 | 24 / 60 → 23 / 58 | 9 / 14 → 9 / 14 | 98 / 220 → 85 / 186 | 98 / 220 → 88 / 197 |
+| Public brand | 27 → 27 | 27 → 26 | 9 → 9 | 112 → 98 | 112 → 101 |
+| Claims, all families | 11,892 → 11,874 | 12,133 → 12,084 | 10,822 → 10,826 | 103,937 → 103,647 | 106,054 → 105,643 |
+| Wall-clock runtime | | 115 s → 109 s | 121 s → 123 s | | 542 s → 504 s |
+
+The smoke batch's live website difference is idehytta.no, which did not answer during the 1.2.0 run. In the live 1,000 run 1.2.0 also found selbuvvs.no for SELBU VVS AS after setting aside selbuhus.no (a sister company's site the 1.1.0 run had published), plus two sites that had not answered during the 1.1.0 run.
+
+Items 1.1.0 published that 1.2.0 withholds, on the replayed 1,000 sample (smoke batch in brackets):
+
+| Rule | Removed | Examples |
+|---|---|---|
+| Group, brand, manager or sister site not published as the company's website | 15 websites (0), with their 15 profiles, 20 news items, 34 contacts, 5 careers links and 12 brands | gobb.no and labo.no (housing-cooperative managers reached through a borettslag's registry email), euronext.com for Oslo Børs, systemhus.no dealer page, hallingdal-hytteservice.no (Hallingdal Hytteservice AS, sharing an office with Torpomoen Eigedom AS), froeland.no (another business at the same address) |
+| Parked domain | 3 websites (0) | pisubsea.com "is parked", tagflight.com "parkert hos Mekke Media" |
+| Profile handle does not match the company | 10 (3) | linkedin.com/company/mazeppa-as on mazeppagroup.com for MAZEPPA NORGE AS, linkedin.com/company/ecoas, instagram.com/ceid.svoll |
+| Profile link without a name (id only) | 17 (3) | facebook.com/profile.php?id=…, linkedin.com/company/18344584 |
+| Parent or group account | 5 (0) | facebook.com/systemhus on the dealer page, linkedin.com/company/maritim-management |
+| News: listing page or menu title | 12 (0) | "Nyheter – Villa Møllebakken" (/blog), "Aktuelt – Farsund Fjordhotell", "— Norsk Countrytreff" |
+| News: product, exhibition, careers or vacancy page | 29 (1) | levia.no/products/… from a Shopify "nyheter" feed, frammuseum.no/utstillinger/…, "Jobb hos oss – Telemark Taxi" |
+| News: one bulk import date for the whole feed | 29 (0) | nine posts dated within one day of a site rebuild, theme demo posts ("Do Seniors Pay Property Taxes in Massachusetts?"), venue listings |
+| News: placeholder or repeated template post | 6 (0) | "Hello world!", four "HSC21M Comfort" copies |
+| Careers landing page or recruitment-portal link (not a job ad) | 20 (12) | /karriere, "Ledige stillinger", Recman and Workday portals; 1.1.0 also misread "Bli medlem" and "Slik bestiller du" as careers pages |
+
+At least ten removals per rule (all when fewer) were checked by hand against the cached pages: every group-site relabel names another organisation in its title and the company only in the body or contact text (three are borderline: a two-lawyer shared office site, a restaurant that names its partner gym at the same address, and an owner's personal site where the company name is a book title); every news and careers removal is a listing, product, exhibition, careers, placeholder or bulk-dated item; the parent and group accounts are the chain's or manager's. The cost is in profiles: most of the id-only links and about seven of the ten non-matching handles (`moovtrening`, `juliusbokbinderi`, `Kolstadelektro`) are probably the companies' own accounts, but neither their handle nor their link text names the company, so they are withheld.
 
 ### Revision 1 (1.1.0) against the first submission (1.0.0, `499a573`)
 

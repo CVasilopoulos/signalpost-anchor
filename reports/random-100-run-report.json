@@ -2,19 +2,19 @@
   "report_version": "signalpost-anchor-run-report/1.0",
   "agent": {
     "name": "Signalpost Anchor",
-    "version": "1.1.0"
+    "version": "1.2.0"
   },
   "run": {
-    "run_id": "random-100-r1",
-    "started_at": "2026-10-17T16:18:57.321Z",
-    "completed_at": "2026-10-17T16:21:02.823Z",
+    "run_id": "run-20261023T085534",
+    "started_at": "2026-10-23T08:55:34.512Z",
+    "completed_at": "2026-10-23T08:57:37.730Z",
     "terminal_status": "completed",
     "agent": "Signalpost Anchor",
-    "agent_version": "1.1.0",
-    "evidence_cutoff": "2026-10-17T16:21:02.823Z"
+    "agent_version": "1.2.0",
+    "evidence_cutoff": "2026-10-23T08:57:37.730Z"
   },
   "environment": {
-    "python": "3.12.14",
+    "python": "3.12.15",
     "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.41",
     "cpu_count": 24
   },
@@ -122,10 +122,10 @@
     "public_brand": 0.09
   },
   "claims": {
-    "total": 10840,
-    "per_company_mean": 108.4,
+    "total": 10826,
+    "per_company_mean": 108.3,
     "by_field": {
-      "financials.filed_copy": 476,
+      "financials.filed_copy": 463,
       "financials.annual_result": 284,
       "financials.total_assets": 284,
       "financials.equity": 284,
@@ -185,7 +185,7 @@
       "identity.number_of_shares": 86,
       "leadership.accountant": 68,
       "activity.registry_employee_count": 63,
-      "financials.filed_copy_years": 59,
+      "financials.filed_copy_years": 58,
       "financials.inventory": 55,
       "leadership.ceo": 49,
       "activity.registry_event": 48,
@@ -204,8 +204,8 @@
       "location.lei_headquarters_address": 16,
       "identifier.lei_registered_date": 16,
       "contact.registry_mobile": 14,
+      "activity.registry_industry_change": 11,
       "activity.registry_address_change": 10,
-      "activity.registry_industry_change": 10,
       "identity.employees": 10,
       "activity.registry_articles_updated": 10,
       "website.official_url": 10,
@@ -225,12 +225,12 @@
       "group.size": 5,
       "profile.facebook": 5,
       "financials.goodwill": 5,
-      "website.logo": 4,
       "group.ultimate_parent": 4,
       "group.parent": 4,
       "group.subsidiary": 3,
       "activity.registry_postal_address_change": 3,
       "profile.instagram": 3,
+      "website.logo": 3,
       "leadership.named_on_website": 3,
       "website.about_description": 3,
       "activity.registry_vat_status_change": 2,
@@ -259,16 +259,16 @@
     "enabled": true,
     "state": "complete",
     "token_source": "NAV published public token (api/publicToken)",
-    "pages_read": 370,
+    "pages_read": 368,
     "segments": 16,
     "lookback_days": 180,
-    "newest_change_seen": "2026-10-17T17:54:02.093724+02:00",
-    "ads_indexed": 89226,
-    "active_ads_indexed": 10027,
+    "newest_change_seen": "2026-10-23T10:55:40.971078+02:00",
+    "ads_indexed": 89579,
+    "active_ads_indexed": 10008,
     "error": null,
-    "candidates": 10,
+    "candidates": 11,
     "verified": 0,
-    "rejected_orgnr_mismatch": 10,
+    "rejected_orgnr_mismatch": 11,
     "inactive": 0,
     "errors": 0,
     "second_pass_companies": 0,
@@ -280,17 +280,17 @@
     "errors": []
   },
   "operations": {
-    "requests": 1513,
-    "bytes_received": 206792856,
-    "request_p50_ms": 256,
-    "request_p95_ms": 1165,
+    "requests": 1494,
+    "bytes_received": 205038139,
+    "request_p50_ms": 255,
+    "request_p95_ms": 1057,
     "top_hosts": {
-      "data.brreg.no": 564,
-      "pam-stilling-feed.nav.no": 381,
+      "data.brreg.no": 563,
+      "pam-stilling-feed.nav.no": 380,
       "www.mntannlegeklinikk.no": 14,
       "feminin-fysikk.no": 10,
-      "microkaffi.com": 9,
       "www.sundmed.se": 8,
+      "microkaffi.com": 8,
       "svetek.com": 7,
       "pmfirst.no": 7,
       "www.hunkemoller.no": 7,
@@ -299,22 +299,30 @@
       "www.gausdalelektro.no": 7
     },
     "transport_errors": {
-      "ConnectError": 35,
-      "ConnectTimeout": 21,
-      "RemoteProtocolError": 1
+      "ConnectError": 36,
+      "ConnectTimeout": 21
     },
-    "runtime_s": 125.6,
-    "company_runtime_p50_ms": 8455.2416279912,
-    "company_runtime_p95_ms": 26276.359714102,
+    "runtime_s": 123.3,
+    "company_runtime_p50_ms": 8536.797741893679,
+    "company_runtime_p95_ms": 26088.802906218916,
     "third_party_cost_usd": 0.0,
     "llm_calls": 0,
     "paid_apis": []
   },
   "filing_copy_years": {
-    "companies_checked": 59,
+    "companies_checked": 58,
     "skipped_no_accounts": 0,
     "rate_limited": 0,
     "stopped_at_time_budget": true,
-    "pending": 41
+    "pending": 42
+  },
+  "withheld": {
+    "total": 14,
+    "companies": 10,
+    "by_rule": {
+      "job_employer_not_company": 11,
+      "news_not_a_post_url": 2,
+      "news_no_publish_date": 1
+    }
   }
 }

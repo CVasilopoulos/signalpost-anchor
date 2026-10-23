@@ -65,7 +65,7 @@ def main() -> None:
         "verified_website": "Verified official website",
         "public_brand": "Public brand",
         "company_profiles": "Company-owned social/video profiles",
-        "hiring_any": "Hiring (ads, careers page or portal)",
+        "hiring_any": "Hiring (single job ads)",
         "job_postings": "Active job postings",
         "registry_activity": "Dated registry activity",
         "website_news": "Dated website news",
@@ -95,6 +95,18 @@ def main() -> None:
         f"| Language-model calls | {ops['llm_calls']} |",
         "",
     ]
+    withheld = report.get("withheld") or {}
+    if withheld.get("by_rule"):
+        lines += [
+            "## Withheld items",
+            "",
+            f"Items found but not published ({withheld['total']} across {withheld['companies']} companies; each listed in `withheld.jsonl` with the page URL and the content hash of the cached page):",
+            "",
+            "| Rule | Items |",
+            "|---|---|",
+        ]
+        lines += [f"| {rule} | {count} |" for rule, count in withheld["by_rule"].items()]
+        lines.append("")
     if args.refresh_report:
         refresh = json.loads(Path(args.refresh_report).read_text(encoding="utf-8"))
         lines += [
