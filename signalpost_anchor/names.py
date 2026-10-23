@@ -42,6 +42,19 @@ DIRECTORY_DOMAINS = {
 
 TRANSLIT = str.maketrans({"æ": "ae", "ø": "o", "å": "a", "ä": "a", "ö": "o", "ü": "u", "é": "e", "è": "e", "á": "a", "ó": "o"})
 TRANSLIT_ALT = str.maketrans({"æ": "ae", "ø": "oe", "å": "aa", "ä": "ae", "ö": "oe", "ü": "ue", "é": "e", "è": "e"})
+TRANSLIT_FLAT = str.maketrans({"æ": "a", "ø": "o", "å": "a", "ä": "a", "ö": "o", "ü": "u", "é": "e", "è": "e", "á": "a", "ó": "o"})
+
+GROUP_WORDS = {
+    "HOLDING", "HOLDINGS", "INVEST", "INVESTMENT", "INVESTMENTS", "INVESTERING", "EIENDOM", "EIENDOMMER", "EIENDOMSSELSKAP",
+    "EIENDOMSUTVIKLING", "EIGEDOM", "EIGEDOMAR", "DRIFT", "CAPITAL", "GROUP", "GRUPPEN", "GRUPPE", "KONSERN", "PROSJEKT",
+    "PROSJEKTER", "UTVIKLING", "MANAGEMENT", "SERVICE", "SERVICES", "UTLEIE", "HANDEL", "PARTNER", "PARTNERS", "VENTURES",
+    "INTERNATIONAL", "GLOBAL", "NORGE", "NORWAY", "NORDIC", "NORDEN", "NORDISK", "SCANDINAVIA", "SKANDINAVIA", "SVERIGE",
+    "SWEDEN", "DANMARK", "DENMARK", "FINLAND", "EUROPE", "EUROPA", "INVESTOR", "1", "2", "3", "I", "II", "III", "IV",
+}
+ORG_TYPE_PREFIXES = {"STIFTELSEN", "STIFTINGA", "SAMEIET", "BORETTSLAG", "BORETTSLAGET", "FORENINGEN", "ANDELSLAGET", "LAGET"}
+HANDLE_SUFFIXES = ("official", "offisiell", "norway", "norge", "asa", "as", "sa", "da", "ans", "nuf", "ltd", "oy", "ab", "aps", "gmbh", "inc", "llc", "hq", "no", "com", "dk", "se", "fi")
+HANDLE_PREFIXES = ("official", "the", "as")
+CONNECTOR_WORDS = {"OG", "AND", "&", "AV", "TIL", "FOR", "I", "PÅ", "OF", "THE", "DE", "DEN", "DET", "MED"}
 
 WEIGHTS = (3, 2, 7, 6, 5, 4, 3, 2)
 
@@ -221,6 +234,130 @@ def name_span(name: str, text: str, before: int = 40, after: int = 80) -> str | 
         return None
     words = [r"(?:og|&|and)" if word == "og" else re.escape(word) for word in core.split()]
     pattern = re.compile(r"(?<![\wæøå])" + r"[\W_]*".join(words) + r"(?![\wæøå])", re.I)
+    match = pattern.search(text or "")
+    if not match:
+        return None
+    start = max(0, match.start() - before)
+    return re.sub(r"\s+", " ", text[start: match.end() + after]).strip()
+
+
+def _compact_variants(words: list[str]) -> set[str]:
+    variants = set()
+    for table in (None, TRANSLIT, TRANSLIT_ALT, TRANSLIT_FLAT):
+        joined = "".join(word.lower().translate(table) if table else word.lower() for word in words)
+        joined = re.sub(r"[^a-z0-9æøåäöü]", "", joined)
+        if joined:
+            variants.add(joined)
+    return variants
+
+
+def name_forms(name: str) -> tuple[set[str], set[str]]:
+    raw = [part for part in tokens(name) if part not in LEGAL_SUFFIXES]
+    words = ["OG" if part in ("&", "+") else part for part in raw]
+    if not [word for word in words if word != "OG"]:
+        return set(), set()
+    full: set[str] = set()
+    plain = [word for word in words if word not in ("OG", "AND")]
+    for option in (words, plain, ["AND" if word == "OG" else word for word in words]):
+        full |= _compact_variants(option)
+    trimmed = list(plain)
+    while len(trimmed) > 1 and trimmed[0] in ORG_TYPE_PREFIXES:
+        trimmed = trimmed[1:]
+    if trimmed != plain:
+        full |= _compact_variants(trimmed)
+        while len(trimmed) > 1 and trimmed[0] in ("TIL", "AV", "FOR", "I"):
+            trimmed = trimmed[1:]
+        full |= _compact_variants(trimmed)
+    partial: set[str] = set()
+    distinct = [word for word in trimmed if word not in GENERIC_TOKENS and len(word) >= 3 and not word.isdigit()]
+    dropped = [word for word in trimmed if word not in distinct]
+    if distinct and len(distinct) < len(trimmed) and not any(word in GROUP_WORDS for word in dropped):
+        partial |= {form for form in _compact_variants(distinct) if len(form) >= (5 if len(distinct) > 1 else 6)}
+    for k in range(2, len(trimmed)):
+        if trimmed[k - 1] in CONNECTOR_WORDS:
+            continue
+        partial |= {form for form in _compact_variants(trimmed[:k]) if len(form) >= 5}
+    if len(trimmed) > 1 and len(trimmed[0]) >= 10 and trimmed[0] in distinct and not any(word in GROUP_WORDS for word in trimmed[1:]):
+        partial |= _compact_variants(trimmed[:1])
+    return {form for form in full if len(form) >= 3}, partial - full
+
+
+def names_forms(names: list[str]) -> tuple[set[str], set[str]]:
+    full: set[str] = set()
+    partial: set[str] = set()
+    for name in names:
+        if not name:
+            continue
+        one_full, one_partial = name_forms(name)
+        full |= one_full
+        partial |= one_partial
+    return full, partial - full
+
+
+def handle_variants(handle: str) -> set[str]:
+    text = unicodedata.normalize("NFKC", handle or "").lower().lstrip("@")
+    text = re.sub(r"[\s\-_.]*\d{6,}$", "", text)
+    base = re.sub(r"[^a-z0-9æøåäöüé]", "", text)
+    if not base:
+        return set()
+    out: set[str] = set()
+    for table in (None, TRANSLIT, TRANSLIT_ALT, TRANSLIT_FLAT):
+        value = base.translate(table) if table else base
+        out.add(value)
+        stripped = value
+        for _ in range(3):
+            suffix = next((item for item in HANDLE_SUFFIXES if stripped.endswith(item) and len(stripped) - len(item) >= 3), None)
+            if not suffix:
+                break
+            stripped = stripped[: -len(suffix)]
+            out.add(stripped)
+        for prefix in HANDLE_PREFIXES:
+            for item in list(out):
+                if item.startswith(prefix) and len(item) - len(prefix) >= 3:
+                    out.add(item[len(prefix):])
+    return out
+
+
+def handle_match(handle: str, full: set[str], partial: set[str]) -> str | None:
+    variants = handle_variants(handle)
+    if not variants:
+        return None
+    if variants & full:
+        return "full"
+    if variants & partial:
+        return "partial"
+    for variant in variants:
+        if len(variant) >= 8 and any(form.startswith(variant) and len(variant) >= 0.75 * len(form) for form in full):
+            return "partial"
+    for variant in variants:
+        if any(len(form) >= 5 and variant.startswith(form) and len(variant) - len(form) >= 4 for form in full):
+            return "extended"
+    return None
+
+
+def domain_label(domain: str) -> str:
+    label = (domain or "").split(".")[0].lower()
+    if label.startswith("xn--"):
+        try:
+            label = label.encode("ascii").decode("idna")
+        except UnicodeError:
+            return ""
+    return re.sub(r"[^a-z0-9æøåäöü]", "", label)
+
+
+def exact_name_in_text(name: str, text: str) -> bool:
+    full = simplify(name)
+    if len(full.replace(" ", "")) < 4:
+        return False
+    return f" {full} " in f" {simplify(text)} "
+
+
+def exact_name_span(name: str, text: str, before: int = 40, after: int = 80) -> str | None:
+    words = [part for part in tokens(name) if part]
+    if len("".join(words)) < 4:
+        return None
+    parts = [r"(?:&|og|\+|and)" if word in ("&", "+", "OG") else re.escape(word) for word in words]
+    pattern = re.compile(r"(?<![\wæøå])" + r"[\W_]*".join(parts) + r"(?![\wæøå])", re.I)
     match = pattern.search(text or "")
     if not match:
         return None

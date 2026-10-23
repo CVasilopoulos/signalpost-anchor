@@ -50,11 +50,12 @@ def test_contact_extraction_normalises_norwegian_phone():
     assert "vktv@vktv.no" in extract.mailto_and_text_emails(soup, "")
 
 
-def test_feed_parser_reads_rss_and_atom_dates():
+def test_feed_parser_reads_publish_dates_and_keeps_atom_updated_apart():
     rss = """<rss><channel><item><title>Ny fiber i Vuku</title><link>https://www.vktv.no/nyheter/vuku</link><pubDate>Tue, 06 Oct 2026 10:00:00 +0200</pubDate></item></channel></rss>"""
-    atom = """<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>Driftsmelding</title><link href="https://www.vktv.no/drift"/><updated>2026-09-30T08:00:00Z</updated></entry></feed>"""
-    assert extract.parse_feed(rss, "https://www.vktv.no/") == [{"title": "Ny fiber i Vuku", "url": "https://www.vktv.no/nyheter/vuku", "date": "2026-10-06"}]
-    assert extract.parse_feed(atom, "https://www.vktv.no/")[0]["date"] == "2026-09-30"
+    atom = """<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>Driftsmelding</title><link href="https://www.vktv.no/drift"/><updated>2026-09-30T08:00:00Z</updated><published>2026-09-29T08:00:00Z</published></entry></feed>"""
+    assert extract.parse_feed(rss, "https://www.vktv.no/") == [{"title": "Ny fiber i Vuku", "url": "https://www.vktv.no/nyheter/vuku", "date": "2026-10-06", "date_source": "feed <pubDate>"}]
+    entry = extract.parse_feed(atom, "https://www.vktv.no/")[0]
+    assert (entry["date"], entry["modified"]) == ("2026-09-29", "2026-09-30")
 
 
 def test_sitemap_parser_separates_index_from_urls():

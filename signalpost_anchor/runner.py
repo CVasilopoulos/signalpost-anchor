@@ -247,6 +247,9 @@ async def run_batch(options: Options, fetcher_factory: Any = None) -> tuple[list
     await fetcher.close()
     report = build_report(options, run_meta, envelopes, raw_records, duplicates, invalid, timings, fetcher, nav_index, nav_stats, external_result, previous_path, started_clock)
     report["filing_copy_years"] = filing_stats
+    withheld = [{"organisation_number": org, **item} for org, ctx in contexts.items() for item in ctx.ledger.withheld]
+    report["withheld"] = {"total": len(withheld), "companies": len({item["organisation_number"] for item in withheld}), "by_rule": dict(Counter(item["rule"] for item in withheld).most_common())}
+    report["_withheld_items"] = withheld
     return envelopes, report
 
 
@@ -369,6 +372,7 @@ def run(options: Options) -> int:
     envelopes, report = asyncio.run(run_batch(options))
     output = options.output
     write_jsonl(output / "envelopes.jsonl", envelopes)
+    write_jsonl(output / "withheld.jsonl", report.pop("_withheld_items", []))
     (output / "run-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
     if options.site:
         from .site import build_site

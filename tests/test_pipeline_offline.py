@@ -17,7 +17,7 @@ SITE_HTML = """<html lang="nb"><head><title>Consto | Bygg og anlegg</title>
 <meta name="description" content="Consto bygger bærekraftige løsninger i Nord-Norge.">
 <meta property="og:site_name" content="Consto">
 <link rel="alternate" type="application/rss+xml" href="/feed/">
-<script type="application/ld+json">{"@type":"JobPosting","title":"Prosjektleder","datePosted":"2026-10-02","validThrough":"2099-01-01"}</script>
+<script type="application/ld+json">{"@type":"JobPosting","title":"Prosjektleder","datePosted":"2026-10-02","validThrough":"2099-01-01","url":"https://consto.no/karriere/prosjektleder","hiringOrganization":{"@type":"Organization","name":"HIRING_ORG"}}</script>
 </head><body><a href="/kontakt">Kontakt</a><a href="/karriere">Karriere</a>
 <a href="https://www.linkedin.com/company/consto">LinkedIn</a><a href="https://www.facebook.com/consto.no">Facebook</a>
 <a href="mailto:firmapost@consto.no">firmapost@consto.no</a><a href="tel:+4777600000">77 60 00 00</a>
@@ -101,9 +101,9 @@ def world(state: dict):
                 return httpx.Response(200, json={"id": "p1", "next_id": None, "items": [{"id": "u1", "url": "/api/v1/feedentry/u1", "_feed_entry": {"uuid": "u1", "status": "ACTIVE", "title": "Tømrer", "businessName": "Consto AS avd Tromsø", "sistEndret": "2026-10-10T10:00:00+02:00"}},
                     {"id": "u2", "url": "/api/v1/feedentry/u2", "_feed_entry": {"uuid": "u2", "status": "ACTIVE", "title": "Snekker", "businessName": "CONSTO AS", "sistEndret": "2026-10-10T10:00:00+02:00"}}]})
             if path == "/api/v1/feedentry/u1":
-                return httpx.Response(200, json={"uuid": "u1", "status": "ACTIVE", "ad_content": {"title": "Tømrer", "published": "2026-10-09T09:00:00+02:00", "expires": "2026-11-01T00:00:00+01:00", "link": "https://arbeidsplassen.nav.no/stillinger/stilling/u1", "employer": {"name": "CONSTO AS AVD TROMSØ", "orgnr": SUBUNIT, "homepage": "https://consto.no"}, "workLocations": [{"city": "TROMSØ"}], "contactList": [{"name": "Private Person", "phone": "99999999"}]}})
+                return httpx.Response(200, json={"uuid": "u1", "status": "ACTIVE", "ad_content": {"title": "Tømrer", "published": "2026-10-09T09:00:00+02:00", "expires": "2026-11-01T00:00:00+01:00", "link": state.get("u1_link", "https://arbeidsplassen.nav.no/stillinger/stilling/u1"), "employer": {"name": "CONSTO AS AVD TROMSØ", "orgnr": SUBUNIT, "homepage": "https://consto.no"}, "workLocations": [{"city": "TROMSØ"}], "contactList": [{"name": "Private Person", "phone": "99999999"}]}})
             if path == "/api/v1/feedentry/u2":
-                return httpx.Response(200, json={"uuid": "u2", "status": "ACTIVE", "ad_content": {"title": "Snekker", "employer": {"name": "CONSTO AS", "orgnr": "111111118"}}})
+                return httpx.Response(200, json={"uuid": "u2", "status": "ACTIVE", "ad_content": {"title": "Snekker", "employer": {"name": "CONSTO AS", "orgnr": state.get("u2_orgnr", "111111118")}}})
         if host == "nordlysbakeri.no":
             if path == "/robots.txt":
                 return httpx.Response(404)
@@ -113,7 +113,7 @@ def world(state: dict):
             if path == "/robots.txt":
                 return httpx.Response(200, text="User-agent: *\nDisallow: /intern/\n")
             if path in ("/", ""):
-                return httpx.Response(200, text=SITE_HTML, headers={"content-type": "text/html; charset=utf-8"})
+                return httpx.Response(200, text=SITE_HTML.replace("HIRING_ORG", state.get("hiring_org", "Consto AS")), headers={"content-type": "text/html; charset=utf-8"})
             if path == "/feed/":
                 return httpx.Response(200, text=RSS, headers={"content-type": "application/rss+xml"})
             if path in ("/kontakt", "/karriere"):
@@ -162,7 +162,8 @@ def test_website_is_verified_by_organisation_number_and_feeds_profile_facts(tmp_
     assert site["value"] == "https://consto.no/"
     assert site["method"] == "organisation_number_on_site"
     assert consto["sections"]["website"]["state"] == "available"
-    assert {"profile.linkedin", "profile.facebook", "contact.website_email", "hiring.career_page", "activity.website_news", "identity.public_brand"} <= set(fields(consto))
+    assert {"profile.linkedin", "profile.facebook", "contact.website_email", "activity.website_news", "identity.public_brand"} <= set(fields(consto))
+    assert not {"hiring.career_page", "hiring.recruitment_portal"} & set(fields(consto))
 
 
 def test_nav_ads_are_published_only_when_employer_orgnr_matches(tmp_path):
@@ -299,3 +300,27 @@ def test_facts_from_a_source_not_checked_last_time_are_not_reported_as_new(tmp_p
     envelope = by_org(second)[ORG]
     assert "financials.filed_copy" in fields(envelope)
     assert not any(change["field"].startswith("financials.filed_copy") for change in envelope["changes"])
+
+
+def test_nav_ad_posted_by_the_registered_parent_is_withheld(tmp_path):
+    envelopes, report = run_world(tmp_path, {"u2_orgnr": "935955211"}, [ORG])
+    jobs = [c["value"] for c in by_org(envelopes)[ORG]["claims"] if c["field"] == "hiring.job_posting" and c.get("source_system") == "NAV arbeidsplassen"]
+    assert jobs == ["Tømrer"]
+    withheld = [item for item in report["_withheld_items"] if item["rule"] == "job_employer_not_company"]
+    assert withheld and withheld[0]["value"] == "Snekker" and "registered parent" in withheld[0]["detail"]
+
+
+def test_nav_search_link_is_replaced_by_the_single_ad_page(tmp_path):
+    envelopes, _ = run_world(tmp_path, {"u1_link": "https://arbeidsplassen.nav.no/stillinger?q=Consto"}, [ORG])
+    job = next(c for c in by_org(envelopes)[ORG]["claims"] if c["field"] == "hiring.job_posting" and c.get("source_system") == "NAV arbeidsplassen")
+    assert job["url"] == "https://arbeidsplassen.nav.no/stillinger/stilling/u1"
+
+
+def test_website_job_posting_is_published_only_when_the_hiring_organisation_is_the_company(tmp_path):
+    own, _ = run_world(tmp_path, {}, [ORG])
+    site_jobs = [c for c in by_org(own)[ORG]["claims"] if c.get("source_system") == "company_website"]
+    assert [(c["value"], c["url"]) for c in site_jobs] == [("Prosjektleder", "https://consto.no/karriere/prosjektleder")]
+    (tmp_path / "other").mkdir()
+    other, report = run_world(tmp_path / "other", {"hiring_org": "Barlindhaug AS"}, [ORG])
+    assert not [c for c in by_org(other)[ORG]["claims"] if c.get("source_system") == "company_website"]
+    assert any(item["rule"] == "job_hiring_organization_not_company" for item in report["_withheld_items"])

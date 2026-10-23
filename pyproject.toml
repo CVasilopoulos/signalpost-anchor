@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "signalpost-anchor"
-version = "1.1.0"
+version = "1.2.0"
 description = "Organisation-number-anchored research agent for Norwegian companies with claim-level evidence"
 requires-python = ">=3.10"
 license = { text = "MIT" }

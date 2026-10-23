@@ -677,7 +677,16 @@ async def fetch_group(fetcher: Fetcher, ctx: CompanyContext, max_subsidiaries: i
         node = path[-1]
         parent = path[-2]
         ledger.claim("legal_identity", "group.parent", f"{parent.get('navn')} ({parent.get('organisasjonsnummer')})", [ev(f"node {ctx.organisation_number}.parentOrganisasjonsnummer", f"parent {node.get('parentNavn')} {node.get('parentOrganisasjonsnummer')} {node.get('grunnlag')} {node.get('dato')}")], label="Direct parent (konsern mor)", relationship="parent", as_of=node.get("dato"), extra={"parent_organisation_number": parent.get("organisasjonsnummer"), "ownership_basis": node.get("grunnlag"), "link_type": _get(node, "knytningsform", "beskrivelse")})
+    if len(path) > 1:
+        ctx.group_relatives[str(path[0].get("organisasjonsnummer"))] = {"name": path[0].get("navn"), "relation": "ultimate_parent"}
+        ctx.group_relatives[str(path[-2].get("organisasjonsnummer"))] = {"name": path[-2].get("navn"), "relation": "parent"}
+        for sibling in path[-2].get("children") or []:
+            if sibling.get("organisasjonsnummer") and sibling.get("organisasjonsnummer") != ctx.organisation_number:
+                ctx.group_relatives.setdefault(str(sibling["organisasjonsnummer"]), {"name": sibling.get("navn"), "relation": "sibling"})
     for child, depth in _descendants(path[-1])[:max_subsidiaries]:
+        if child.get("organisasjonsnummer"):
+            ctx.group_relatives.setdefault(str(child["organisasjonsnummer"]), {"name": child.get("navn"), "relation": "subsidiary"})
+
         org = child.get("organisasjonsnummer")
         value = f"{child.get('navn')} ({org})"
         label = "Subsidiary" if depth == 1 else f"Indirect subsidiary (level {depth})"

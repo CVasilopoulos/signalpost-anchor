@@ -16,6 +16,8 @@ from ..timeutil import parse_iso
 
 FEED = "https://pam-stilling-feed.nav.no"
 SOURCE = "NAV arbeidsplassen – job vacancy feed"
+SINGLE_AD = re.compile(r"^https://arbeidsplassen\.nav\.no/stillinger/stilling/[0-9a-z\-]+/?$", re.I)
+UUID = re.compile(r"^[0-9a-z\-]{2,64}$", re.I)
 
 
 def normalise_employer(name: str) -> str:
@@ -220,6 +222,8 @@ async def attach_jobs(index: NavJobIndex, contexts: list[CompanyContext], stop_a
         orgnr = re.sub(r"\D", "", str(employer.get("orgnr") or ""))
         if orgnr not in ctx.related_organisation_numbers():
             stats["rejected_orgnr_mismatch"] += 1
+            relation = (ctx.group_relatives.get(orgnr) or {}).get("relation")
+            ctx.ledger.withhold("job_employer_not_company", "hiring.job_posting", ad.get("title") or entry.get("title") or "", url=f"https://arbeidsplassen.nav.no/stillinger/stilling/{body.get('uuid') or entry['uuid']}", fetched=fetched, detail=f"employer {employer.get('name')} ({orgnr or 'no number'})" + (f", registered {relation.replace('_', ' ')}" if relation else ""))
             return
         stats["verified"] += 1
         publish_job(ctx, fetched, body, ad, employer, orgnr)
@@ -234,7 +238,13 @@ def publish_job(ctx: CompanyContext, fetched: Fetched, body: dict[str, Any], ad:
     title = (ad.get("title") or "").strip()
     if not title:
         return
-    link = ad.get("link") or f"https://arbeidsplassen.nav.no/stillinger/stilling/{body.get('uuid')}"
+    link = (ad.get("link") or "").strip()
+    if not SINGLE_AD.match(link):
+        uuid = str(body.get("uuid") or "")
+        if not UUID.match(uuid):
+            ledger.withhold("job_not_a_single_ad", "hiring.job_posting", title, url=link or None, fetched=fetched)
+            return
+        link = f"https://arbeidsplassen.nav.no/stillinger/stilling/{uuid}"
     published = (ad.get("published") or "")[:10] or None
     expires = (ad.get("expires") or "")[:10] or None
     locations = []
@@ -278,7 +288,6 @@ def finalise_hiring(ctx: CompanyContext, index: NavJobIndex | None) -> None:
     if index is not None and index.state == "complete" and getattr(index, "attached", False):
         ledger.checked("nav")
     nav_jobs = [claim for claim in ledger.claims if claim["field"] == "hiring.job_posting" and claim.get("source_system") == "NAV arbeidsplassen"]
-    site_jobs = [claim for claim in ledger.claims if claim["field"] == "hiring.job_posting" and claim.get("source_system") == "company_website"]
     if nav_jobs:
         evidence = [eid for claim in nav_jobs for eid in claim["evidence_ids"]]
         ledger.claim("hiring", "hiring.active_job_ads_nav", len(nav_jobs), evidence, label="Active job ads on NAV arbeidsplassen matched by organisation number", as_of=(index.completed_at or "")[:10] if index else None, method="count_of_verified_ads", unit="ads")
@@ -287,14 +296,15 @@ def finalise_hiring(ctx: CompanyContext, index: NavJobIndex | None) -> None:
         sources.append(SOURCE)
     if ctx.website:
         sources.append("Company website")
+    careers_note = "; the verified website has a careers page, but careers landing pages and recruitment-portal links are not job ads and are not published" if ctx.careers_page_seen else ""
     if ledger.claims_for("hiring"):
-        ledger.section("hiring", "available", None if nav_jobs or site_jobs else "Careers page or recruitment portal found; no dated postings extracted", sources=sources)
+        ledger.section("hiring", "available", None, sources=sources)
         return
     if index is None:
-        ledger.section("hiring", "not_available", "Job sources disabled for this run", sources=sources)
+        ledger.section("hiring", "not_available", f"Job sources disabled for this run{careers_note}", sources=sources)
     elif index.state in ("failed", "blocked"):
         ledger.section("hiring", "blocked" if index.state == "blocked" else "failed", f"NAV job feed unavailable: {index.error}", sources=sources)
     elif index.state == "partial":
-        ledger.section("hiring", "not_available", f"No matching ads in the part of the NAV feed that was read ({index.error})", sources=sources)
+        ledger.section("hiring", "not_available", f"No matching ads in the part of the NAV feed that was read ({index.error}){careers_note}", sources=sources)
     else:
-        ledger.section("hiring", "not_available", f"No active NAV job ads for this organisation number or its subunits (feed read for the last {index.lookback_days} days of changes){'; no careers page on verified website' if ctx.website else ''}", sources=sources)
+        ledger.section("hiring", "not_available", f"No active NAV job ads for this organisation number or its subunits (feed read for the last {index.lookback_days} days of changes){careers_note}", sources=sources)

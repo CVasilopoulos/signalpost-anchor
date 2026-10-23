@@ -5,7 +5,7 @@ import re
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 from typing import Any
-from urllib.parse import urljoin, urlsplit, urlunsplit
+from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 from xml.etree import ElementTree
 
 from bs4 import BeautifulSoup
@@ -175,16 +175,94 @@ def profile_handle(url: str) -> str:
     return segments[-1] if segments else ""
 
 
-def social_links(soup: BeautifulSoup, base_url: str) -> dict[str, list[str]]:
-    found: dict[str, list[str]] = {}
+HANDLE_SYNTAX = {
+    "instagram": re.compile(r"^[A-Za-z0-9_.]{1,30}$"),
+    "x": re.compile(r"^[A-Za-z0-9_]{1,15}$"),
+    "tiktok": re.compile(r"^@[A-Za-z0-9_.]{1,30}$"),
+    "threads": re.compile(r"^@[A-Za-z0-9_.]{1,30}$"),
+    "github": re.compile(r"^[A-Za-z0-9\-]{1,39}$"),
+}
+
+CREDIT_PHRASES = re.compile(r"(levert av|leveret af|designet av|designed by|design by|design|webdesign|web design|utviklet av|udviklet af|developed by|laget av|lagd av|made by|nettside av|nettsted av|nettsider? fr[aå]|hjemmeside av|website by|site by|built by|bygget av|powered by|drevet av|drevet med|produsert av|levert i samarbeid med|en del av|part of|eies av|owned by|medlem av|member of|webmaster|tema av|theme by|wordpress-tema)\s*[:\-–|]?\s*$", re.I)
+CREDIT_LABEL = re.compile(r"(levert av|leveret af|designet av|designed by|design by|utviklet av|developed by|laget av|made by|nettside av|website by|powered by|drevet av|theme by|tema av)", re.I)
+
+
+def _label_of(anchor) -> str:
+    parts = [anchor.get_text(" ", strip=True), anchor.get("title") or "", anchor.get("aria-label") or ""]
+    parts += [image.get("alt") or "" for image in anchor.find_all("img")]
+    return re.sub(r"\s+", " ", " ".join(part for part in parts if part)).strip()[:200]
+
+
+def _preceding_text(anchor, limit: int = 80) -> str:
+    texts: list[str] = []
+    node = anchor
+    for _ in range(3):
+        sibling = node.previous_sibling
+        while sibling is not None and sum(len(text) for text in texts) < limit:
+            text = sibling.get_text(" ", strip=True) if hasattr(sibling, "get_text") else str(sibling).strip()
+            if text:
+                texts.insert(0, text)
+            sibling = sibling.previous_sibling
+        if texts or node.parent is None or node.parent.name in ("body", "html", "footer"):
+            break
+        node = node.parent
+    return re.sub(r"\s+", " ", " ".join(texts))[-limit:]
+
+
+def social_link_details(soup: BeautifulSoup, base_url: str) -> dict[str, list[dict[str, str]]]:
+    found: dict[str, list[dict[str, str]]] = {}
     for anchor in soup.find_all("a", href=True):
         href = urljoin(base_url, anchor["href"].strip())
         for platform, pattern in SOCIAL_PATTERNS.items():
             if pattern.match(href):
                 url = canonical_profile(platform, href)
-                if url and url not in found.setdefault(platform, []):
-                    found[platform].append(url)
+                if not url or not valid_profile(platform, url):
+                    continue
+                items = found.setdefault(platform, [])
+                if all(item["url"] != url for item in items):
+                    items.append({"url": url, "label": _label_of(anchor), "before": _preceding_text(anchor)})
     return found
+
+
+def social_links(soup: BeautifulSoup, base_url: str) -> dict[str, list[str]]:
+    return {platform: [item["url"] for item in items] for platform, items in social_link_details(soup, base_url).items()}
+
+
+def valid_profile(platform: str, url: str) -> bool:
+    handle = profile_handle(url)
+    if not handle or re.search(r"[\s<>\"']", unquote(handle)):
+        return False
+    pattern = HANDLE_SYNTAX.get(platform)
+    return not pattern or bool(pattern.match(handle))
+
+
+def profile_name(platform: str, url: str) -> str | None:
+    parts = urlsplit(url)
+    segments = [unquote(segment) for segment in parts.path.split("/") if segment]
+    if not segments:
+        return None
+    if platform == "facebook":
+        if segments[0] == "profile.php":
+            return None
+        if segments[0] in ("people", "pages", "p", "pg") and len(segments) >= 2:
+            name = segments[1]
+        else:
+            name = segments[0]
+        name = re.sub(r"[\-_.]*\d{6,}$", "", name)
+        return name if re.search(r"[A-Za-zÆØÅæøå]", name) else None
+    if platform == "linkedin":
+        name = segments[1] if len(segments) >= 2 else ""
+        return name if re.search(r"[A-Za-zÆØÅæøå]", name) else None
+    if platform == "youtube":
+        if segments[0].startswith("@"):
+            return segments[0][1:]
+        if segments[0] in ("c", "user") and len(segments) >= 2:
+            return segments[1]
+        return None
+    handle = segments[0].lstrip("@")
+    if handle.isdigit():
+        return None
+    return handle
 
 
 def links(soup: BeautifulSoup, base_url: str) -> list[tuple[str, str]]:
@@ -297,9 +375,13 @@ def parse_feed(xml_text: str, base_url: str) -> list[dict[str, Any]]:
                 href = child.get("href") or (child.text or "").strip()
                 if href and (child.get("rel") in (None, "alternate")):
                     record["url"] = urljoin(base_url, href)
-            elif child_tag in ("pubDate", "published", "updated", "date") and child.text and "date" not in record:
+            elif child_tag in ("pubDate", "published", "date", "issued") and child.text and not record.get("date"):
                 record["date"] = parse_date(child.text)
+                record["date_source"] = f"feed <{child_tag}>"
+            elif child_tag in ("updated", "modified", "lastBuildDate") and child.text:
+                record["modified"] = parse_date(child.text)
         if record.get("title") and record.get("url"):
+            record.setdefault("date", None)
             items.append(record)
     return items
 
@@ -337,22 +419,67 @@ def parse_sitemap(xml_text: str) -> tuple[list[dict[str, Any]], list[str]]:
     return urls, children
 
 
-def page_published_date(soup: BeautifulSoup, objects: list[dict[str, Any]]) -> str | None:
-    for item in objects:
-        for key in ("datePublished", "dateCreated", "uploadDate"):
-            if item.get(key):
-                parsed = parse_date(item[key])
+ARTICLE_TYPES = {
+    "Article", "NewsArticle", "BlogPosting", "PressRelease", "Report", "ReportageNewsArticle", "AnalysisNewsArticle",
+    "OpinionNewsArticle", "ReviewNewsArticle", "BackgroundNewsArticle", "AskPublicNewsArticle", "TechArticle",
+    "LiveBlogPosting", "SocialMediaPosting", "ScholarlyArticle", "DiscussionForumPosting",
+}
+PUBLISHED_META = ("article:published_time", "og:published_time", "article:published", "DC.date.issued", "dcterms.issued", "pubdate", "publish-date", "publish_date", "parsely-pub-date", "sailthru.date")
+TIME_PUBLISH_HINT = re.compile(r"(publish|posted|entry-date|post-date|post__date|article-date|news-date|dato|datePublished)", re.I)
+URL_DATE = re.compile(r"/((?:19|20)\d{2})/(\d{1,2})/(\d{1,2})(?:/|$)")
+
+
+def url_date(url: str) -> str | None:
+    match = URL_DATE.search(urlsplit(url).path)
+    if not match:
+        return None
+    return parse_date(f"{match.group(1)}-{int(match.group(2)):02d}-{int(match.group(3)):02d}")
+
+
+PAGE_TYPES = {"WebPage", "ItemPage", "WebSite"}
+
+
+def _same_page(value: Any, url: str) -> bool:
+    if not isinstance(value, str) or not value.startswith("http") or not url:
+        return True
+    return unquote(urlsplit(value).path).rstrip("/") == unquote(urlsplit(url).path).rstrip("/")
+
+
+def page_published_date(soup: BeautifulSoup, objects: list[dict[str, Any]], url: str = "") -> tuple[str | None, str | None]:
+    for kinds in (ARTICLE_TYPES, PAGE_TYPES):
+        for item in objects:
+            if types_of(item) & kinds and item.get("datePublished") and _same_page(item.get("url"), url):
+                parsed = parse_date(item["datePublished"])
                 if parsed:
-                    return parsed
-    value = meta(soup, "article:published_time", "og:published_time", "date", "dc.date", "DC.date.issued", "pubdate", "publish-date", "sailthru.date")
-    if value:
-        parsed = parse_date(value)
+                    return parsed, "json-ld datePublished"
+    for name in PUBLISHED_META:
+        value = meta(soup, name)
+        parsed = parse_date(value) if value else None
         if parsed:
-            return parsed
-    time_tag = soup.find("time", attrs={"datetime": True})
-    if time_tag:
-        return parse_date(time_tag["datetime"])
-    return None
+            return parsed, f"meta {name}"
+    for tag in soup.find_all("time", attrs={"datetime": True}):
+        hints = " ".join([" ".join(tag.get("class") or []), str(tag.get("itemprop") or ""), "pubdate" if tag.has_attr("pubdate") else ""] + [" ".join(parent.get("class") or []) for parent in tag.parents if getattr(parent, "name", None) in ("div", "span", "p", "header")][:2])
+        if TIME_PUBLISH_HINT.search(hints):
+            parsed = parse_date(tag["datetime"])
+            if parsed:
+                return parsed, "time[datetime] (publish)"
+    for container in soup.find_all(["article", "main"]):
+        tag = container.find("time", attrs={"datetime": True})
+        if tag:
+            parsed = parse_date(tag["datetime"])
+            if parsed:
+                return parsed, f"{container.name} time[datetime]"
+    parsed = url_date(url) if url else None
+    if parsed:
+        return parsed, "date in URL"
+    return None, None
+
+
+def is_product_page(soup: BeautifulSoup, objects: list[dict[str, Any]]) -> bool:
+    types = {kind for item in objects for kind in types_of(item)}
+    if types & {"Product", "ProductGroup"} and not types & ARTICLE_TYPES:
+        return True
+    return (meta(soup, "og:type") or "").lower() in ("product", "og:product", "product.item")
 
 
 def page_title(soup: BeautifulSoup) -> str | None:

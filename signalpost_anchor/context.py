@@ -23,6 +23,8 @@ class CompanyContext:
     nav_employer_homepages: list[str] = field(default_factory=list)
     nav_employer_descriptions: list[dict[str, Any]] = field(default_factory=list)
     wikidata: dict[str, Any] | None = None
+    group_relatives: dict[str, dict[str, Any]] = field(default_factory=dict)
+    careers_page_seen: bool = False
     lei: dict[str, Any] | None = None
     deadline: float = 0.0
     started_at: str = ""
@@ -40,6 +42,21 @@ class CompanyContext:
         numbers = {self.organisation_number}
         numbers.update(unit.get("organisasjonsnummer") for unit in self.subunits if unit.get("organisasjonsnummer"))
         return numbers
+
+    def family_organisation_numbers(self) -> set[str]:
+        numbers = self.related_organisation_numbers()
+        numbers.update(org for org, item in self.group_relatives.items() if item.get("relation") == "subsidiary")
+        return numbers
+
+    def own_names(self) -> list[str]:
+        values = [self.name]
+        values += [unit.get("navn") for unit in self.subunits[:20] if unit.get("navn")]
+        former = sorted((item for item in (self.entity or {}).get("historiskeNavn") or [] if item.get("navn")), key=lambda item: str(item.get("tilDato") or ""), reverse=True)
+        values += [item["navn"] for item in former[:1]]
+        return [value for value in dict.fromkeys(values) if value]
+
+    def relative_names(self) -> list[str]:
+        return [item["name"] for item in self.group_relatives.values() if item.get("name")]
 
     def names(self) -> set[str]:
         values = {self.name}

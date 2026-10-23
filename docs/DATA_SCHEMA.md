@@ -52,7 +52,9 @@ States: `available` (facts published), `not_available` (source checked, nothing 
 }
 ```
 
-`key` is stable across runs and drives refresh. `relationship` is `exact_entity`, `registered_subunit` (for example a job ad posted by a registered subunit), `parent` (including `website.parent_company_site`), `group_brand` (`website.group_brand_site`, a shared site listing several organisation numbers), `subsidiary`, `ultimate_parent` or `company_owned_profile`. Claims carried forward from a previous run when their source failed have `stale: true` and `stale_reason`.
+`key` is stable across runs and drives refresh. `relationship` is `exact_entity`, `registered_subunit` (for example a job ad posted by a registered subunit), `parent` (including `website.parent_company_site`), `group_brand` (`website.group_brand_site`, a group, chain, brand, manager or shared site that names the company by its organisation number or exact legal name; its value is the company's page when that page sits inside another organisation's site), `subsidiary`, `ultimate_parent` or `company_owned_profile`. Claims carried forward from a previous run when their source failed have `stale: true` and `stale_reason`. `website.official_url` carries `verification.site_scope` (`own` or `shared`) and, for shared sites, `site_scope_reason`; `profile.*` claims from a website carry `match` (which name form the handle matched); `activity.website_news` claims carry `date_source` (where the publish date was read).
+
+Items found but not published are written to `OUTPUT/withheld.jsonl` (`organisation_number`, `rule`, `field`, `value`, `url`, `source_url`, `content_sha256` of the cached page, `detail`), not to the envelopes.
 
 Field families: `identity.*`, `financials.*`, `leadership.*`, `location.*`, `website.*`, `profile.<platform>`, `hiring.*`, `activity.*`, `contact.*`, `identifier.*`.
 

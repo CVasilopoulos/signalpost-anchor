@@ -18,13 +18,21 @@ from ..names import (
     LEGAL_SUFFIXES,
     TRANSLIT,
     distinctive_tokens,
+    domain_label,
     domain_label_matches,
+    exact_name_in_text,
+    exact_name_span,
     find_orgnrs,
     guess_domains,
+    handle_match,
+    handle_variants,
+    name_forms,
     name_in_text,
     name_span,
+    names_forms,
     orgnr_context,
     registered_domain,
+    simplify,
     valid_orgnr,
 )
 from ..robots import RobotsCache
@@ -43,6 +51,53 @@ IDENTITY_LINK_PRIORITY = (
 FOUNDED_PATTERN = re.compile(r"\b(?:etablert|grunnlagt|stiftet|founded|established)\s+(?:i|in)\s+((?:18|19|20)\d{2})\b", re.I)
 NEWS_PATH = re.compile(r"/(nyheter|nyhet|aktuelt|news|blogg|blog|presse|press|artikler|artikkel|articles|insights|innsikt|media|pressemeldinger|arkiv)(/|$)", re.I)
 PARKING_HINTS = re.compile(r"(domain (is )?for sale|domenet er til salgs|this domain (has been|is) registered|dette domenet er registrert|parkert|parked (free|domain)|buy this domain|kjøp dette domenet|website coming soon|under construction|kommer snart|default web page|welcome to nginx|it works!|domeneshop|one\.com - |site not found)", re.I)
+STRONG_PARKING_HINTS = re.compile(r"(\bis parked\b|parked at|domenet er parkert|er parkert hos|placeholder page|is registered,? but the owner|domain (is )?for sale|domenet er til salgs|buy this domain|kjøp dette domenet|parkingcrew|sedoparking|domain parking|this site is parked|denne siden er parkert|default web page|welcome to nginx|it works!|site not found)", re.I)
+HOSTING_DOMAINS = {
+    "wixsite.com", "wix.com", "squarespace.com", "weebly.com", "wordpress.com", "blogspot.com", "webflow.io", "jimdofree.com",
+    "jimdosite.com", "jimdo.com", "site123.me", "godaddysites.com", "business.site", "mystrikingly.com", "strikingly.com",
+    "webnode.page", "webnode.no", "carrd.co", "framer.website", "framer.app", "square.site", "ueniweb.com", "canva.site",
+    "netlify.app", "github.io", "vercel.app", "123hjemmeside.no",
+}
+BUILDER_HANDLES = {
+    "wix", "wixcom", "squarespace", "webflow", "wordpress", "wordpressdotcom", "wordpresscom", "elementor", "shopify",
+    "godaddy", "jimdo", "weebly", "onecom", "hubspot", "mailchimp", "themeforest", "envato", "envatomarket", "framer",
+    "strikingly", "duda", "webnode", "yola", "sitejet", "zyro", "hostinger", "123hjemmeside", "domeneshop", "proisp",
+    "yoast", "elegantthemes", "divi", "themefusion", "avada", "wpastra", "generatepress", "oceanwp", "flatsome", "uxthemes",
+    "kriesi", "qodeinteractive", "themeisle", "themegrill", "athemes", "thimpress", "pixelgrade", "wpbakery", "woocommerce",
+    "bigcommerce", "wpengine", "cloudflare", "google", "googlemaps", "vipps", "klarna", "trustpilot", "monosolutions", "makeweb",
+}
+LANGUAGE_SEGMENT = re.compile(r"^[a-z]{2}([-_][a-z]{2})?$", re.I)
+INDEX_SEGMENT = re.compile(r"^(index\.(html?|php|aspx?)|home|hjem|forside|start|default\.aspx?)$", re.I)
+SECTION_SEGMENTS = {
+    "nyheter", "nyhet", "news", "aktuelt", "aktuelle-saker", "blogg", "blog", "blogs", "bloggen", "presse", "press",
+    "pressemeldinger", "pressemelding", "press-releases", "artikler", "artikkel", "articles", "article", "insights", "innsikt",
+    "media", "mediesenter", "arkiv", "archive", "archives", "siste-nytt", "sistenytt", "nyhetsarkiv", "newsroom", "posts",
+    "stories", "magasin", "magazine", "saker", "nytt", "feed", "rss", "nyheter-og-aktuelt", "aktuelt-og-nyheter",
+    "hendelser", "events", "arrangementer", "kalender",
+}
+LISTING_SEGMENTS = {"category", "categories", "kategori", "kategorier", "tag", "tags", "emne", "emner", "author", "authors", "forfatter", "search", "sok", "søk"}
+CATALOGUE_SEGMENTS = {
+    "products", "product", "produkt", "produkter", "product-category", "produktkategori", "produkt-kategori", "shop", "butikk",
+    "nettbutikk", "collections", "collection", "vare", "varer", "varekategori", "sortiment", "katalog", "catalog", "catalogue",
+    "tjenester", "tjeneste", "services", "utstillinger", "utstilling", "exhibitions", "exhibition", "meny", "menu",
+}
+CAREER_SEGMENTS = (
+    "karriere", "career", "careers", "jobb-hos", "jobbe-hos", "jobb", "jobs", "job", "ledig-stilling", "ledige-stillinger",
+    "ledigstilling", "ledigestillinger", "stillinger", "stilling", "vacancies", "vacancy", "rekruttering", "recruitment",
+    "bli-medlem", "blimedlem", "medlemskap", "membership",
+)
+MENU_TITLES = {
+    "nyheter", "nyhet", "news", "aktuelt", "blogg", "blog", "arkiv", "archive", "presse", "press", "pressemeldinger",
+    "press releases", "artikler", "articles", "innsikt", "insights", "media", "siste nytt", "latest news", "nyhetsarkiv",
+    "newsroom", "se flere nyheter", "se alle nyheter", "flere nyheter", "alle nyheter", "see more news", "see all news",
+    "more news", "all news", "read more", "les mer", "les flere", "vis flere", "vis alle", "hjem", "home", "forside",
+    "kontakt", "kontakt oss", "contact", "contact us", "om oss", "about", "about us", "nyheter og aktuelt", "aktuelle saker",
+    "stories", "magasin", "blogginnlegg", "blog posts", "arrangementer", "events", "kalender",
+}
+MENU_PREFIXES = ("se flere", "se alle", "see more", "see all", "les mer", "read more", "vis flere", "vis alle", "flere nyheter", "alle nyheter")
+PLACEHOLDER_TITLE = re.compile(r"^(hello world!?|hei verden!?|sample (page|post)|eksempelside|eksempelinnlegg|blog post title.*|lorem ipsum.*|vacancy \d+|test|testinnlegg|test post|uncategori[sz]ed|ukategorisert|untitled|uten tittel|new post|nytt innlegg)$", re.I)
+NAV_SEARCH = re.compile(r"arbeidsplassen\.nav\.no/stillinger/?(\?|$)", re.I)
+TITLE_SPLIT = re.compile(r"\s+[|–—\-·:»/]\s+|^\s*[|–—\-·:»/]+\s*|\s*[|–—\-·:»/]+\s*$")
 
 
 TEXT_PHONE = re.compile(r"(?<![\wæøå])(?:tlf|telefon|tel|phone|ring|mobil|mob|sentralbord)\.?\s*:?\s*((?:\+47[\s\u00a0]?)?\d{2,3}(?:[\s\u00a0]?\d{2,3}){2,3})(?!\d)", re.I)
@@ -83,6 +138,7 @@ class Page:
     lang: str | None = None
     objects: list[dict[str, Any]] = field(default_factory=list)
     socials: dict[str, list[str]] = field(default_factory=dict)
+    social_details: dict[str, list[dict[str, str]]] = field(default_factory=dict)
     links: list[tuple[str, str]] = field(default_factory=list)
     emails: list[str] = field(default_factory=list)
     phones: list[str] = field(default_factory=list)
@@ -91,6 +147,8 @@ class Page:
     orgnrs: set[str] = field(default_factory=set)
     orgnr_links: dict[str, str] = field(default_factory=dict)
     published: str | None = None
+    published_source: str | None = None
+    is_product: bool = False
     is_html: bool = True
 
 
@@ -107,10 +165,12 @@ def parse_page(fetched: Fetched) -> Page:
     page.site_name = extract.meta(soup, "og:site_name", "application-name")
     html_tag = soup.find("html")
     page.lang = (html_tag.get("lang") if html_tag else None) or None
-    page.socials = extract.social_links(soup, fetched.final_url)
+    page.social_details = extract.social_link_details(soup, fetched.final_url)
+    page.socials = {platform: [item["url"] for item in items] for platform, items in page.social_details.items()}
     page.links = extract.links(soup, fetched.final_url)
     page.phones = extract.tel_links(soup)
-    page.published = extract.page_published_date(soup, page.objects)
+    page.published, page.published_source = extract.page_published_date(soup, page.objects, fetched.final_url)
+    page.is_product = extract.is_product_page(soup, page.objects)
     for tag in soup.find_all("link", attrs={"type": re.compile(r"(rss|atom)\+xml", re.I)}):
         if tag.get("href"):
             page.feeds.append(urljoin(fetched.final_url, tag["href"]))
@@ -228,6 +288,68 @@ def _street_tokens(ctx: CompanyContext) -> tuple[str | None, str | None]:
     return (street.lower() if street else None, address.get("postnummer"))
 
 
+def is_deep(url: str) -> bool:
+    segments = [segment for segment in urlsplit(url).path.split("/") if segment]
+    while segments and len(segments) <= 3 and LANGUAGE_SEGMENT.match(segments[0]):
+        segments = segments[1:]
+    return any(not INDEX_SEGMENT.match(segment) for segment in segments)
+
+
+def _norm(text: str | None) -> str:
+    return simplify(text or "")
+
+
+def clean_title(title: str, labels: set[str]) -> str:
+    parts = [part.strip() for part in TITLE_SPLIT.split(title or "") if part and part.strip()]
+    kept = [part for part in parts if _norm(part) not in labels and re.sub(r"[^a-z0-9æøå]", "", _norm(part)) not in labels]
+    return " - ".join(kept).strip()
+
+
+def news_url_rejection(url: str, domain: str, page: Any = None) -> str | None:
+    parts = urlsplit(url)
+    if registered_domain(parts.hostname or "") != domain:
+        return "news_not_a_post_url"
+    segments = [unquote(segment).lower() for segment in parts.path.split("/") if segment]
+    while segments and LANGUAGE_SEGMENT.match(segments[0]) and len(segments) > 1:
+        segments = segments[1:]
+    if not segments or (len(segments) == 1 and LANGUAGE_SEGMENT.match(segments[0])) or INDEX_SEGMENT.match(segments[-1]):
+        return "news_not_a_post_url"
+    last = re.sub(r"\.(html?|php|aspx?)$", "", segments[-1])
+    if last in SECTION_SEGMENTS or re.fullmatch(r"(19|20)\d{2}|\d{1,3}|page\d*|side\d*", last) or any(segment in LISTING_SEGMENTS for segment in segments):
+        return "news_not_a_post_url"
+    if len(segments) >= 2 and segments[-2] in ("page", "side") and last.isdigit():
+        return "news_not_a_post_url"
+    if any(segment in CATALOGUE_SEGMENTS for segment in segments) or re.search(r"(^|&)(product|post_type=product)", parts.query) or (page is not None and getattr(page, "is_product", False)):
+        return "news_product_or_catalogue_page"
+    if any(segment == word or segment.startswith(word + "-") for segment in segments for word in CAREER_SEGMENTS):
+        return "news_careers_or_membership_page"
+    return None
+
+
+def news_title_rejection(title: str, labels: set[str]) -> str | None:
+    cleaned = clean_title(title, labels)
+    norm = _norm(cleaned)
+    if not norm or norm in MENU_TITLES or norm in labels or any(norm.startswith(prefix) for prefix in MENU_PREFIXES):
+        return "news_menu_or_listing_title"
+    if PLACEHOLDER_TITLE.match(cleaned.strip()) or PLACEHOLDER_TITLE.match(norm):
+        return "news_placeholder_post"
+    return None
+
+
+def bulk_dated(dates: list[str], window_days: int = 3) -> set[str]:
+    values = sorted(date.fromisoformat(value) for value in dates if value)
+    if len(values) < 5:
+        return set()
+    best: list[date] = []
+    for index, start in enumerate(values):
+        group = [value for value in values[index:] if (value - start).days < window_days]
+        if len(group) > len(best):
+            best = group
+    if len(best) >= 0.8 * len(values):
+        return {value.isoformat() for value in best}
+    return set()
+
+
 class WebsiteResearcher:
     def __init__(self, fetcher: Fetcher, robots: RobotsCache, *, allow_guess: bool = True, site_budget_s: float = 30.0, max_pages: int = 9):
         self.fetcher = fetcher
@@ -315,7 +437,8 @@ class WebsiteResearcher:
             if owner:
                 result["parent_site"] = {"organisation_number": owner, "name": parents[owner], "page": next(page for page in pages if owner in page.orgnrs)}
             return result
-        if PARKING_HINTS.search((pages[0].title or "") + " " + pages[0].text[:600]) and not name_on_text:
+        head = (pages[0].title or "") + " " + pages[0].text[:600]
+        if STRONG_PARKING_HINTS.search(head) or (PARKING_HINTS.search(head) and not name_on_text):
             result["conflict"] = "parked or placeholder page"
             return result
         span_page = pages[0]
@@ -365,6 +488,7 @@ class WebsiteResearcher:
             return
         registry_outcome = None
         blocked_reason = None
+        pending_group: tuple[dict[str, Any], list[Page], Page] | None = None
         assessed: set[str] = set()
         for candidate in candidates:
             if time.monotonic() > deadline:
@@ -394,13 +518,24 @@ class WebsiteResearcher:
                     registry_outcome = "failed" if transient else (registry_outcome or outcome)
                 continue
             final_domain = registered_domain(urlsplit(home.fetched.final_url).hostname or "")
-            if final_domain != candidate["domain"] and candidate["source"] not in ("registry", "previous"):
-                follow = candidate["source"] in GUESS_SOURCES and final_domain not in DIRECTORY_DOMAINS and final_domain not in assessed and domain_label_matches(ctx.name if candidate["source"] == "guess" else candidate.get("name_basis") or ctx.name, final_domain)
-                if follow:
+            if final_domain != candidate["domain"]:
+                if candidate["source"] in ("registry", "previous") and final_domain in HOSTING_DOMAINS:
+                    candidate = {**candidate, "hosted_at": home.fetched.final_url}
+                elif candidate["source"] in GUESS_SOURCES:
+                    follow = final_domain not in DIRECTORY_DOMAINS and final_domain not in assessed and domain_label_matches(ctx.name if candidate["source"] == "guess" else candidate.get("name_basis") or ctx.name, final_domain)
+                    if not follow:
+                        ctx.website_candidates.append({**candidate, "outcome": "rejected", "reason": f"redirects to {final_domain}"})
+                        continue
                     candidate = {**candidate, "domain": final_domain, "detail": f"{candidate.get('detail')}; redirected from {candidate['domain']}", "redirected_from": candidate["domain"]}
-                elif final_domain in DIRECTORY_DOMAINS or candidate["source"] in GUESS_SOURCES:
+                elif final_domain in DIRECTORY_DOMAINS:
                     ctx.website_candidates.append({**candidate, "outcome": "rejected", "reason": f"redirects to {final_domain}"})
                     continue
+                else:
+                    candidate = {**candidate, "domain": final_domain, "redirected_from": candidate["domain"]}
+                    if is_deep(home.fetched.final_url):
+                        candidate["off_site_page"] = home.fetched.final_url
+            elif candidate["source"] == "registry" and is_deep(candidate["url"]) and not self.domain_matches_company(ctx, candidate["domain"], candidate["source"]):
+                candidate = {**candidate, "off_site_page": home.fetched.final_url}
             if candidate["domain"] in assessed:
                 ctx.website_candidates.append({**candidate, "outcome": "skipped", "reason": "domain already assessed"})
                 continue
@@ -419,30 +554,53 @@ class WebsiteResearcher:
                             break
             record = {**candidate, "final_url": home.fetched.final_url, "signals": assessment["signals"]}
             if assessment["verified"]:
-                record.update(outcome="verified", method=assessment["method"])
+                scope = self.classify_scope(ctx, candidate, pages)
+                record["scope"] = scope["scope"]
+                if scope.get("reason"):
+                    record["scope_reason"] = scope["reason"]
+                if scope["scope"] in ("own", "shared"):
+                    record.update(outcome="verified", method=assessment["method"])
+                    ctx.website_candidates.append(record)
+                    await self._publish(ctx, candidate, pages, assessment, deadline, scope)
+                    return
+                record.update(outcome="rejected", reason=scope["reason"])
+                parents = registered_parents(ctx)
+                owner = next((number for number in scope["others"] if number in parents), None)
+                if owner and not ctx.ledger.first_value("website.parent_company_site"):
+                    record["outcome"] = "parent_company_site"
+                    page = next((item for item in pages if owner in item.orgnrs), pages[0])
+                    self._publish_related_site(ctx, "parent", home, page, orgnr_context(page.text, owner) or page.orgnr_links.get(owner) or owner, {"parent_organisation_number": owner}, parents[owner], candidate)
+                else:
+                    proof = self._name_or_number_span(ctx, pages)
+                    if proof and not ctx.ledger.first_value("website.group_brand_site"):
+                        record["outcome"] = "group_brand_site"
+                        self._publish_related_site(ctx, "group", home, proof[0], proof[1], {"other_organisation_numbers": scope["others"]} if scope["others"] else None, None, candidate)
+                if pending_group is None:
+                    pending_group = (candidate, pages, home)
                 ctx.website_candidates.append(record)
-                await self._publish(ctx, candidate, pages, assessment, deadline)
-                return
+                if candidate["source"] == "registry":
+                    registry_outcome = "unconfirmed"
+                continue
             record.update(outcome="rejected", reason=assessment.get("conflict") or "identity not confirmed")
             group_site = assessment.get("group_site")
             if group_site and not ctx.ledger.first_value("website.group_brand_site"):
                 record["outcome"] = "group_brand_site"
-                ev = ctx.ledger.evidence_for(group_site["page"].fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="text", span=group_site["span"], method="organisation_number_on_shared_site")
-                site_root = f"{urlsplit(home.fetched.final_url).scheme}://{urlsplit(home.fetched.final_url).netloc}/"
-                ctx.ledger.claim("website", "website.group_brand_site", site_root, [ev], label="Shared group or brand website that lists this company's organisation number (not the company's own site)", method="organisation_number_on_shared_site", relationship="group_brand", confidence=0.9, extra={"other_organisation_numbers": group_site["others"]})
+                self._publish_related_site(ctx, "group", home, group_site["page"], group_site["span"], {"other_organisation_numbers": group_site["others"]}, None, candidate)
+                if pending_group is None:
+                    pending_group = (candidate, pages, home)
             parent_site = assessment.get("parent_site")
             if parent_site and not ctx.ledger.first_value("website.parent_company_site"):
                 record["outcome"] = "parent_company_site"
                 page = parent_site["page"]
                 span = orgnr_context(page.text, parent_site["organisation_number"]) or page.orgnr_links.get(parent_site["organisation_number"]) or parent_site["organisation_number"]
-                ev = ctx.ledger.evidence_for(page.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="text", span=span, method="parent_organisation_number_on_site")
-                site_root = f"{urlsplit(home.fetched.final_url).scheme}://{urlsplit(home.fetched.final_url).netloc}/"
-                ctx.ledger.claim("website", "website.parent_company_site", site_root, [ev], label=f"Website of registered parent {parent_site['name']} (not the company's own site)", method="parent_organisation_number_on_site", relationship="parent", confidence=0.9, extra={"parent_organisation_number": parent_site["organisation_number"]})
+                self._publish_related_site(ctx, "parent", home, page, span, {"parent_organisation_number": parent_site["organisation_number"]}, parent_site["name"], candidate)
             ctx.website_candidates.append(record)
             if candidate["source"] == "registry":
                 registry_outcome = "unconfirmed"
+        if pending_group is not None:
+            await self._publish_restricted(ctx, *pending_group, deadline)
         if registry_outcome == "unconfirmed":
-            reason = next((c.get("reason") for c in ctx.website_candidates if c["source"] == "registry"), "identity not confirmed")
+            reason = next((c.get("reason") for c in ctx.website_candidates if c["source"] == "registry" and c.get("reason")), "identity not confirmed")
             ledger.section("website", "ambiguous", f"Registry-listed website could not be tied to this organisation ({reason}); not published as the official site", sources=[SITE_SOURCE])
         elif blocked_reason and not any(c.get("outcome") == "unreachable" for c in ctx.website_candidates if c["source"] == "registry"):
             ledger.section("website", "blocked", f"Website refused automated access: {blocked_reason}", sources=[SITE_SOURCE])
@@ -450,7 +608,7 @@ class WebsiteResearcher:
             ledger.section("website", "failed", "Registry-listed or previously verified website timed out or refused the connection in this run", sources=[SITE_SOURCE])
         elif any(c.get("outcome") == "group_brand_site" for c in ctx.website_candidates):
             shared = next(c for c in ctx.website_candidates if c.get("outcome") == "group_brand_site")
-            ledger.section("website", "ambiguous", f"Only a shared group or brand website was found ({shared.get('final_url') or shared['url']}); it lists this organisation number among others and is published as a group site, not as this company's", sources=[SITE_SOURCE])
+            ledger.section("website", "ambiguous", f"Only a group, brand or shared website was found ({shared.get('off_site_page') or shared.get('final_url') or shared['url']}); it names this company but belongs to another organisation or several, so it is published as a group site, not as this company's", sources=[SITE_SOURCE])
         elif any(c.get("outcome") == "parent_company_site" for c in ctx.website_candidates):
             parent = next(c for c in ctx.website_candidates if c.get("outcome") == "parent_company_site")
             ledger.section("website", "ambiguous", f"Only the registered parent's website was found ({parent.get('final_url') or parent['url']}); it is published as the parent's site, not as this company's", sources=[SITE_SOURCE])
@@ -458,6 +616,126 @@ class WebsiteResearcher:
             ledger.section("website", "not_available", "Registry-listed website did not resolve or returned an error; no other candidate verified", sources=[SITE_SOURCE])
         else:
             ledger.section("website", "not_available", f"No candidate domain verified as this organisation's site ({len(candidates)} candidates checked)", sources=[SITE_SOURCE, "DNS"])
+
+    def _publish_related_site(self, ctx: CompanyContext, kind: str, home: Page, page: Page, span: str, extra: dict[str, Any] | None, parent_name: str | None, candidate: dict[str, Any]) -> None:
+        parts = urlsplit(home.fetched.final_url)
+        value = candidate.get("off_site_page") or f"{parts.scheme}://{parts.netloc}/"
+        if kind == "parent":
+            ev = ctx.ledger.evidence_for(page.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="text", span=span, method="parent_organisation_number_on_site")
+            ctx.ledger.claim("website", "website.parent_company_site", value, [ev], label=f"Website of registered parent {parent_name} (not the company's own site)", method="parent_organisation_number_on_site", relationship="parent", confidence=0.9, extra=extra)
+            return
+        method = "organisation_number_on_shared_site" if ctx.organisation_number in page.orgnrs else "name_on_group_or_brand_site"
+        ev = ctx.ledger.evidence_for(page.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="text", span=span, method=method)
+        label = "Company page on a group, chain or brand website (not the company's own site)" if candidate.get("off_site_page") else "Group, brand or shared website that names this company (not the company's own site)"
+        ctx.ledger.claim("website", "website.group_brand_site", value, [ev], label=label, method=method, relationship="group_brand", confidence=0.85, extra=extra)
+
+    def _name_or_number_span(self, ctx: CompanyContext, pages: list[Page]) -> tuple[Page, str] | None:
+        for page in pages:
+            for number in ctx.related_organisation_numbers():
+                if number in page.orgnrs:
+                    return page, orgnr_context(page.text, number) or page.orgnr_links.get(number) or number
+        for page in pages:
+            found = exact_name_span(ctx.name, page.text) or exact_name_span(ctx.name, " ".join(filter(None, [page.title, page.site_name])))
+            if found:
+                return page, found
+        return None
+
+    def identity_texts(self, pages: list[Page]) -> list[str]:
+        texts = [pages[0].title, pages[0].site_name]
+        for page in pages:
+            for obj in extract.org_objects(page.objects):
+                for key in ("name", "legalName", "alternateName"):
+                    if isinstance(obj.get(key), str):
+                        texts.append(obj[key])
+        return [text.strip() for text in dict.fromkeys(texts) if text and text.strip()]
+
+    def foreign_identity_names(self, ctx: CompanyContext, pages: list[Page]) -> list[str]:
+        names = ctx.own_names()
+        full, partial = names_forms(names)
+        forms = full | partial
+        found = []
+        for text in self.identity_texts(pages):
+            for segment in [part.strip() for part in TITLE_SPLIT.split(text) if part and part.strip()]:
+                words = re.findall(r"[\wæøåÆØÅ]+", segment.lower())
+                if not words or len(segment) > 60 or any(name_in_text(name, segment) for name in names):
+                    continue
+                if any("".join(words[:k]) in forms for k in range(1, len(words) + 1)):
+                    continue
+                found.append(segment)
+        return list(dict.fromkeys(found))
+
+    def identity_names_company(self, ctx: CompanyContext, pages: list[Page]) -> bool:
+        names = ctx.own_names()
+        full, partial = names_forms(names)
+        for text in self.identity_texts(pages):
+            if any(name_in_text(name, text) for name in names):
+                return True
+            for segment in [part for part in TITLE_SPLIT.split(text) if part and part.strip()]:
+                words = re.findall(r"[\wæøåÆØÅ]+", segment.lower())
+                for k in range(1, min(len(words), 6) + 1):
+                    joined = "".join(words[:k])
+                    if joined in full or joined in partial:
+                        return True
+        return False
+
+    def domain_matches_company(self, ctx: CompanyContext, domain: str, source: str) -> bool:
+        label = domain_label(domain)
+        full, partial = names_forms(ctx.own_names())
+        if label and (label in full or label in partial):
+            return True
+        return source in ("registry", "previous", "wikidata", "subunit_registry") and domain_label_matches(ctx.name, domain)
+
+    def classify_scope(self, ctx: CompanyContext, candidate: dict[str, Any], pages: list[Page]) -> dict[str, Any]:
+        own_numbers = ctx.related_organisation_numbers()
+        all_orgnrs: set[str] = set()
+        for page in pages:
+            all_orgnrs |= page.orgnrs
+        others = sorted(all_orgnrs - ctx.family_organisation_numbers())
+        own_proof = bool(all_orgnrs & own_numbers)
+        names_company = self.identity_names_company(ctx, pages)
+        domain_match = self.domain_matches_company(ctx, candidate["domain"], candidate["source"])
+        info: dict[str, Any] = {"own_proof": own_proof, "others": others[:5], "identity_names_company": names_company, "domain_matches_company": domain_match}
+        identity = "; ".join(self.identity_texts(pages)[:2])[:120] or candidate["domain"]
+        if candidate.get("off_site_page"):
+            info.update(scope="group", reason=f"the company's page sits on another organisation's website ({candidate['off_site_page']})")
+        elif not others and (own_proof or names_company or domain_match):
+            info.update(scope="own", reason=None)
+        elif own_proof or names_company:
+            info.update(scope="shared", reason=f"site also shows organisation number(s) {', '.join(others[:3])}")
+        elif others:
+            info.update(scope="group", reason=f"site shows organisation number(s) {', '.join(others[:3])}, not this company's, and its identity ({identity}) does not name the company")
+        else:
+            info.update(scope="group", reason=f"site identity ({identity}) names another organisation and the domain does not spell the company name")
+        return info
+
+    def proof_pages(self, ctx: CompanyContext, pages: list[Page]) -> list[Page]:
+        own_numbers = ctx.related_organisation_numbers()
+        return [page for page in pages if page.orgnrs & own_numbers or exact_name_in_text(ctx.name, page.text)]
+
+    def handle_forms(self, ctx: CompanyContext, scope: str, brand: str | None, domain: str, own_proof: bool, source: str = "") -> tuple[set[str], set[str]]:
+        full, partial = names_forms(ctx.own_names())
+        if scope == "own":
+            if brand:
+                brand_full, brand_partial = name_forms(brand)
+                full |= brand_full
+                partial |= brand_partial
+            label = domain_label(domain)
+            if len(label) >= 3 and (own_proof or label in full or label in partial or source in ("registry", "previous", "wikidata", "subunit_registry")):
+                full.add(label)
+        return full, partial - full
+
+    async def _publish_restricted(self, ctx: CompanyContext, candidate: dict[str, Any], pages: list[Page], home: Page, deadline: float) -> None:
+        if ctx.website is not None:
+            return
+        proof = self.proof_pages(ctx, pages)
+        if not proof:
+            return
+        domain = registered_domain(urlsplit(home.fetched.final_url).hostname or "")
+        full, partial = self.handle_forms(ctx, "group", None, domain, False)
+        relatives = names_forms(ctx.relative_names() + self.foreign_identity_names(ctx, pages))
+        self._publish_profiles(ctx, proof, full, partial, relatives, quiet=True, own=False)
+        self._publish_hiring(ctx, proof, domain, own_site=False)
+        await self._publish_activity(ctx, proof, domain, deadline, home, allow_feeds=False)
 
     def _identity_pages(self, home: Page) -> list[str]:
         host = urlsplit(home.fetched.final_url).hostname
@@ -489,22 +767,30 @@ class WebsiteResearcher:
                     urls.append(candidate)
         return urls[:4]
 
-    async def _publish(self, ctx: CompanyContext, candidate: dict[str, Any], pages: list[Page], assessment: dict[str, Any], deadline: float) -> None:
+    async def _publish(self, ctx: CompanyContext, candidate: dict[str, Any], pages: list[Page], assessment: dict[str, Any], deadline: float, scope: dict[str, Any]) -> None:
         ledger = ctx.ledger
         home = pages[0]
-        base_parts = urlsplit(home.fetched.final_url)
+        base_parts = urlsplit(candidate["url"] if candidate.get("hosted_at") else home.fetched.final_url)
         site_root = f"{base_parts.scheme}://{base_parts.netloc}/"
         host = base_parts.hostname or ""
         domain = registered_domain(host)
         proof_page: Page = assessment.get("page") or home
         proof_ev = ledger.evidence_for(proof_page.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="text", span=assessment.get("span"), method=assessment["method"])
-        verification = {"method": assessment["method"], "candidate_source": candidate["source"], "signals": assessment["signals"], "proof_url": proof_page.fetched.final_url}
+        verification = {"method": assessment["method"], "candidate_source": candidate["source"], "signals": assessment["signals"], "proof_url": proof_page.fetched.final_url, "site_scope": scope["scope"]}
+        if scope.get("reason"):
+            verification["site_scope_reason"] = scope["reason"]
+        if candidate.get("hosted_at"):
+            verification["hosted_at"] = candidate["hosted_at"]
         ctx.website = {"url": site_root, "domain": domain, "verification": verification}
         ledger.checked("website")
         ledger.claim("website", "website.official_url", site_root, [proof_ev], label="Verified official website", method=assessment["method"], confidence=0.99 if assessment["method"] == "organisation_number_on_site" else 0.93, extra={"verification": verification})
         extra_pages = await self._extra_pages(ctx, home, pages, deadline)
         pages = pages + extra_pages
-        brand = self._brand(ctx, home, domain)
+        own = scope["scope"] == "own"
+        brand = self._brand(ctx, home, registered_domain(urlsplit(home.fetched.final_url).hostname or ""))
+        if brand and not own and not any(name_in_text(name, brand[0]) for name in ctx.own_names()):
+            ledger.withhold("brand_from_shared_site", "identity.public_brand", brand[0], fetched=home.fetched, detail=scope.get("reason"))
+            brand = None
         if brand:
             ev = ledger.evidence_for(home.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator=brand[1], span=brand[0], method="html_metadata")
             ledger.claim("legal_identity", "identity.public_brand", brand[0], [ev], label="Public brand name on verified website", method="html_metadata", confidence=0.9)
@@ -518,13 +804,24 @@ class WebsiteResearcher:
         if home.lang:
             ev = ledger.evidence_for(home.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="html[lang]", span=home.lang, method="html_metadata")
             ledger.claim("website", "website.language", home.lang[:12], [ev], label="Website language", method="html_metadata")
-        self._publish_profiles(ctx, pages, domain)
-        self._publish_contacts(ctx, pages, domain)
-        self._publish_structured(ctx, pages)
-        self._publish_hiring(ctx, pages, domain)
-        self._publish_site_facts(ctx, pages, home)
-        await self._publish_activity(ctx, pages, domain, deadline)
-        ledger.section("website", "available", f"Verified via {assessment['method'].replace('_', ' ')}", sources=[SITE_SOURCE], checked_at=home.fetched.retrieved_at)
+        source_pages = pages if own else self.proof_pages(ctx, pages)
+        if not own:
+            on_proof = {item["url"] for page in source_pages for items in page.social_details.values() for item in items}
+            for page in pages:
+                if page not in source_pages:
+                    for platform, items in page.social_details.items():
+                        for item in items:
+                            if item["url"] not in on_proof:
+                                ledger.withhold("social_from_group_page_without_proof", f"profile.{platform}", item["url"], fetched=page.fetched, detail=scope.get("reason"))
+        full, partial = self.handle_forms(ctx, scope["scope"], brand[0] if brand else None, domain, scope.get("own_proof", False), candidate["source"])
+        relatives = names_forms(ctx.relative_names() + ([] if own else self.foreign_identity_names(ctx, pages)))
+        self._publish_profiles(ctx, source_pages, full, partial, relatives, own=own)
+        self._publish_contacts(ctx, source_pages, domain)
+        self._publish_structured(ctx, source_pages, full, partial, relatives, own)
+        self._publish_hiring(ctx, source_pages, domain)
+        self._publish_site_facts(ctx, source_pages, home, own)
+        await self._publish_activity(ctx, source_pages, domain, deadline, home, allow_feeds=own, brand=brand[0] if brand else None)
+        ledger.section("website", "available", f"Verified via {assessment['method'].replace('_', ' ')}" + ("" if own else f"; the site is shared with other organisations ({scope.get('reason')}), so profiles, contacts, news and jobs are read only from pages that show this company's organisation number or exact legal name"), sources=[SITE_SOURCE], checked_at=home.fetched.retrieved_at)
 
     async def _extra_pages(self, ctx: CompanyContext, home: Page, pages: list[Page], deadline: float) -> list[Page]:
         host = urlsplit(home.fetched.final_url).hostname
@@ -579,58 +876,62 @@ class WebsiteResearcher:
                 return value.strip(), locator
         return None
 
-    def _profile_tokens(self, ctx: CompanyContext, domain: str) -> set[str]:
-        tokens = {token.lower().translate(TRANSLIT) for token in distinctive_tokens(ctx.name)}
-        tokens |= {token.lower() for token in distinctive_tokens(ctx.name)}
-        brand = ctx.ledger.first_value("identity.public_brand")
-        if brand:
-            tokens |= {token.lower().translate(TRANSLIT) for token in distinctive_tokens(brand)}
-        label = domain.split(".")[0].lower().replace("-", "")
-        if len(label) >= 3:
-            tokens.add(label)
-        return {token for token in tokens if len(token) >= 3}
+    def profile_decision(self, ctx: CompanyContext, platform: str, item: dict[str, str], full: set[str], partial: set[str], relatives: tuple[set[str], set[str]], own: bool = True) -> tuple[bool, str]:
+        url = item["url"]
+        label = item.get("label") or ""
+        before = (item.get("before") or "")[-60:]
+        if extract.CREDIT_LABEL.search(label) or extract.CREDIT_PHRASES.search(before):
+            return False, "social_agency_theme_or_parent_credit"
+        name = extract.profile_name(platform, url)
+        if name is None:
+            if label and any(name_in_text(own, label) for own in ctx.own_names()):
+                return True, "opaque_handle_labelled_with_company_name"
+            return False, "social_opaque_handle_unverifiable"
+        if handle_variants(name) & BUILDER_HANDLES:
+            return False, "social_site_builder_or_theme"
+        match = handle_match(name, full, partial)
+        related = handle_match(name, relatives[0], relatives[1]) if relatives[0] or relatives[1] else None
+        if match == "full" and related != "full":
+            return True, "handle_matches_company_name"
+        if own and match == "partial" and related is None:
+            return True, "handle_matches_company_name_prefix"
+        if own and match == "extended" and related is None:
+            return True, "handle_is_company_name_plus_word"
+        if own and match is None and related is None and label and any(name_in_text(own_name, label) for own_name in ctx.own_names()):
+            if any(variant.startswith(form) for variant in handle_variants(name) for form in full if len(form) >= 5):
+                return True, "handle_starts_with_company_name_and_link_names_company"
+        if related or match:
+            return False, "social_parent_or_group_account"
+        return False, "social_handle_does_not_match_company"
 
-    @staticmethod
-    def _handle_matches(url: str, tokens: set[str]) -> bool:
-        handle = re.sub(r"[^a-z0-9æøå]", "", unquote(extract.profile_handle(url)).lower())
-        plain = handle.translate(TRANSLIT)
-        if any(token in handle or token in plain for token in tokens):
-            return True
-        return len(plain) >= 8 and any(token.startswith(plain) for token in tokens)
-
-    @staticmethod
-    def _opaque_handle(url: str) -> bool:
-        handle = extract.profile_handle(url)
-        return handle.isdigit() or bool(re.fullmatch(r"UC[A-Za-z0-9_\-]{20,}", handle))
-
-    def _publish_profiles(self, ctx: CompanyContext, pages: list[Page], domain: str) -> None:
+    def _publish_profiles(self, ctx: CompanyContext, pages: list[Page], full: set[str], partial: set[str], relatives: tuple[set[str], set[str]], quiet: bool = False, own: bool = True) -> None:
+        family = ctx.family_organisation_numbers()
         ledger = ctx.ledger
-        tokens = self._profile_tokens(ctx, domain)
         published = 0
-        per_platform: dict[str, list[tuple[str, Page]]] = {}
+        per_platform: dict[str, list[tuple[dict[str, str], Page]]] = {}
         for page in pages:
-            for platform, urls in page.socials.items():
-                for url in urls:
-                    if all(url.lower() != existing.lower() for existing, _ in per_platform.get(platform, [])):
-                        per_platform.setdefault(platform, []).append((url, page))
+            for platform, items in page.social_details.items():
+                for item in items:
+                    if all(item["url"].lower() != existing["url"].lower() for existing, _ in per_platform.get(platform, [])):
+                        per_platform.setdefault(platform, []).append((item, page))
         for platform, items in per_platform.items():
-            matching = [item for item in items if self._handle_matches(item[0], tokens)]
-            if matching:
-                keep = matching[:2]
-                confidence = 0.95
-            elif len(items) == 1 and self._opaque_handle(items[0][0]):
-                keep = items
-                confidence = 0.85
-            else:
-                continue
-            for url, page in keep:
+            kept = 0
+            for item, page in items:
+                ok, reason = self.profile_decision(ctx, platform, item, full, partial, relatives, own or not (page.orgnrs - family))
+                if not ok:
+                    ledger.withhold(reason, f"profile.{platform}", item["url"], fetched=page.fetched, detail=item.get("label") or None)
+                    continue
+                if kept >= 2:
+                    continue
+                url = item["url"]
                 ev = ledger.evidence_for(page.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator=f"a[href*={platform}]", span=url, method="outbound_link_on_verified_site")
-                ledger.claim("company_profiles", f"profile.{platform}", url, [ev], key=f"profile.{platform}.{url.lower()}", label=f"{platform.capitalize()} profile linked from verified website", method="outbound_link_on_verified_site", confidence=confidence, relationship="company_owned_profile")
+                ledger.claim("company_profiles", f"profile.{platform}", url, [ev], key=f"profile.{platform}.{url.lower()}", label=f"{platform.capitalize()} profile linked from verified website", method="outbound_link_on_verified_site", confidence=0.95 if reason == "handle_matches_company_name" else 0.88, relationship="company_owned_profile", extra={"match": reason})
+                kept += 1
                 published += 1
         if published:
             ledger.section("company_profiles", "available", None, sources=[SITE_SOURCE])
-        else:
-            ledger.section("company_profiles", "not_available", "Verified website links to no social or video profile whose handle matches the company", sources=[SITE_SOURCE])
+        elif not quiet:
+            ledger.section("company_profiles", "not_available", "Verified website links to no social or video profile whose handle matches the company name", sources=[SITE_SOURCE])
 
     def _publish_contacts(self, ctx: CompanyContext, pages: list[Page], domain: str) -> None:
         ledger = ctx.ledger
@@ -659,12 +960,21 @@ class WebsiteResearcher:
         if emails_done or phones_done:
             ledger.section("contact", "available", None, sources=[SITE_SOURCE])
 
-    def _publish_structured(self, ctx: CompanyContext, pages: list[Page]) -> None:
+    def org_object_is_company(self, ctx: CompanyContext, obj: dict[str, Any], own: bool) -> bool:
+        names = [obj.get(key) for key in ("legalName", "name", "alternateName") if isinstance(obj.get(key), str) and obj.get(key).strip()]
+        if not names:
+            return own
+        if any(name_in_text(own_name, name) for name in names for own_name in ctx.own_names()):
+            return True
+        brand = ctx.ledger.first_value("identity.public_brand")
+        return own and bool(brand) and any(_norm(name) == _norm(brand) for name in names)
+
+    def _publish_structured(self, ctx: CompanyContext, pages: list[Page], full: set[str], partial: set[str], relatives: tuple[set[str], set[str]], own: bool) -> None:
         ledger = ctx.ledger
+        family = ctx.family_organisation_numbers()
         for page in pages:
             for obj in extract.org_objects(page.objects):
-                name = obj.get("legalName") or obj.get("name")
-                if isinstance(name, str) and not (name_in_text(ctx.name, name) or name_in_text(name, ctx.name)) and not ledger.first_value("identity.public_brand"):
+                if not self.org_object_is_company(ctx, obj, own):
                     continue
                 address = obj.get("address")
                 if isinstance(address, list):
@@ -691,34 +1001,35 @@ class WebsiteResearcher:
                 same_as = obj.get("sameAs") or []
                 if isinstance(same_as, str):
                     same_as = [same_as]
-                tokens = self._profile_tokens(ctx, registered_domain(urlsplit(page.fetched.final_url).hostname or ""))
                 for url in same_as[:8]:
                     if not isinstance(url, str):
                         continue
                     for platform, pattern in extract.SOCIAL_PATTERNS.items():
                         if pattern.match(url):
                             cleaned = extract.canonical_profile(platform, url)
-                            if not cleaned or not (self._handle_matches(cleaned, tokens) or self._opaque_handle(cleaned)):
+                            if not cleaned or not extract.valid_profile(platform, cleaned):
+                                continue
+                            ok, reason = self.profile_decision(ctx, platform, {"url": cleaned, "label": "", "before": ""}, full, partial, relatives, own or not (page.orgnrs - family))
+                            if not ok:
+                                ledger.withhold(reason, f"profile.{platform}", cleaned, fetched=page.fetched, detail="json-ld sameAs")
                                 continue
                             ev = ledger.evidence_for(page.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="json-ld sameAs", span=url, method="json_ld")
-                            ledger.claim("company_profiles", f"profile.{platform}", cleaned, [ev], key=f"profile.{platform}.{cleaned.lower()}", label=f"{platform.capitalize()} profile declared in website structured data", method="json_ld", confidence=0.95, relationship="company_owned_profile")
+                            ledger.claim("company_profiles", f"profile.{platform}", cleaned, [ev], key=f"profile.{platform}.{cleaned.lower()}", label=f"{platform.capitalize()} profile declared in website structured data", method="json_ld", confidence=0.95 if reason == "handle_matches_company_name" else 0.9, relationship="company_owned_profile", extra={"match": reason})
                             ledger.section("company_profiles", "available", None, sources=[SITE_SOURCE])
 
-    def _publish_site_facts(self, ctx: CompanyContext, pages: list[Page], home: Page) -> None:
+    def _publish_site_facts(self, ctx: CompanyContext, pages: list[Page], home: Page, own: bool = True) -> None:
         ledger = ctx.ledger
 
         def evidence(page: Page, locator: str, span: str, method: str) -> str:
             return ledger.evidence_for(page.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator=locator, span=span, method=method)
 
-        brand = ledger.first_value("identity.public_brand")
         hours_done = False
         offers: list[tuple[str, Page]] = []
         for page in pages:
             for obj in page.objects:
                 types = extract.types_of(obj)
                 if types & extract.ORG_TYPES:
-                    name = obj.get("legalName") or obj.get("name")
-                    if isinstance(name, str) and not (name_in_text(ctx.name, name) or name_in_text(name, ctx.name)) and not brand:
+                    if not self.org_object_is_company(ctx, obj, own):
                         continue
                     if not hours_done:
                         hours = opening_hours_text(obj)
@@ -803,37 +1114,35 @@ class WebsiteResearcher:
             else:
                 continue
             break
-        for page in pages[1:]:
+        for page in pages:
+            if page is home:
+                continue
             if page.description and len(page.description) >= 40 and page.description != home.description and re.search(r"(om[\s\-_]?oss|about|selskapet|hvem)", urlsplit(page.fetched.final_url).path, re.I):
                 ledger.claim("website", "website.about_description", page.description[:600], [evidence(page, "meta[name=description]", page.description, "html_metadata")], label="About-page description on company website (company-owned copy)", method="html_metadata", confidence=0.88)
                 break
 
-    def _publish_hiring(self, ctx: CompanyContext, pages: list[Page], domain: str) -> None:
+    def _publish_hiring(self, ctx: CompanyContext, pages: list[Page], domain: str, own_site: bool = True) -> None:
         ledger = ctx.ledger
-        career_url = None
-        career_page = None
-        ats: dict[str, tuple[str, Page]] = {}
+        seen: set[str] = set()
         for page in pages:
             for url, text in page.links:
                 link_host = (urlsplit(url).hostname or "").lower()
-                for ats_domain, ats_name in extract.ATS_DOMAINS.items():
-                    if "/" in ats_domain:
-                        if ats_domain in url:
-                            ats.setdefault(ats_name, (url, page))
-                    elif link_host == ats_domain or link_host.endswith("." + ats_domain):
-                        ats.setdefault(ats_name, (url, page))
-                if career_url is None and registered_domain(link_host) == domain and (extract.CAREER_HINTS.search(text) or extract.CAREER_HINTS.search(urlsplit(url).path)):
-                    career_url, career_page = url, page
-        if career_url and career_page:
-            ev = ledger.evidence_for(career_page.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="a[href]", span=career_url, method="link_on_verified_site")
-            ledger.claim("hiring", "hiring.career_page", extract.clean_url(career_url), [ev], label="Careers page on verified website", method="link_on_verified_site", confidence=0.9)
-        for ats_name, (url, page) in list(ats.items())[:3]:
-            ev = ledger.evidence_for(page.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="a[href]", span=url, method="link_on_verified_site")
-            ledger.claim("hiring", "hiring.recruitment_portal", f"{ats_name}: {extract.clean_url(url)}", [ev], key=f"hiring.recruitment_portal.{ats_name}", label="Recruitment portal linked from verified website", method="link_on_verified_site", confidence=0.9)
+                ats_name = None
+                for ats_domain, name in extract.ATS_DOMAINS.items():
+                    if ("/" in ats_domain and ats_domain in url) or link_host == ats_domain or link_host.endswith("." + ats_domain):
+                        ats_name = name
+                        break
+                if ats_name and url not in seen:
+                    seen.add(url)
+                    ledger.withhold("job_recruitment_portal_link", "hiring.recruitment_portal", f"{ats_name}: {extract.clean_url(url)}", url=url, fetched=page.fetched)
+                elif registered_domain(link_host) == domain and (extract.CAREER_HINTS.search(text) or extract.CAREER_HINTS.search(urlsplit(url).path)) and url not in seen:
+                    seen.add(url)
+                    ctx.careers_page_seen = ctx.careers_page_seen or own_site
+                    ledger.withhold("job_careers_landing_page", "hiring.career_page", extract.clean_url(url), url=url, fetched=page.fetched)
+        own_numbers = ctx.related_organisation_numbers()
         for page in pages:
-            for obj in page.objects:
-                if "JobPosting" not in extract.types_of(obj):
-                    continue
+            postings = [obj for obj in page.objects if "JobPosting" in extract.types_of(obj)]
+            for obj in postings:
                 title = obj.get("title")
                 if not isinstance(title, str) or not title.strip():
                     continue
@@ -841,48 +1150,119 @@ class WebsiteResearcher:
                 valid = extract.parse_date(obj.get("validThrough"))
                 if valid and valid < date.today().isoformat():
                     continue
+                organisation = obj.get("hiringOrganization")
+                organisation_name = organisation.get("name") if isinstance(organisation, dict) else organisation if isinstance(organisation, str) else None
+                numbers = find_orgnrs(" ".join(str(organisation.get(key, "")) for key in ("identifier", "taxID", "vatID", "leiCode"))) if isinstance(organisation, dict) else set()
+                if not (numbers & own_numbers or (isinstance(organisation_name, str) and any(name_in_text(name, organisation_name) for name in ctx.own_names()))):
+                    ledger.withhold("job_hiring_organization_not_company", "hiring.job_posting", title.strip()[:200], fetched=page.fetched, detail=f"hiringOrganization: {organisation_name or 'missing'}")
+                    continue
+                raw_url = obj.get("url") if isinstance(obj.get("url"), str) else None
+                ad_url = urljoin(page.fetched.final_url, raw_url) if raw_url else (page.fetched.final_url if len(postings) == 1 else None)
+                if not ad_url or NAV_SEARCH.search(ad_url) or not is_deep(ad_url):
+                    ledger.withhold("job_not_a_single_ad", "hiring.job_posting", title.strip()[:200], url=ad_url, fetched=page.fetched)
+                    continue
                 ev = ledger.evidence_for(page.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="json-ld JobPosting", span=title, method="json_ld")
-                ledger.claim("hiring", "hiring.job_posting", title.strip()[:200], [ev], key=f"hiring.website_job.{title.strip().lower()[:80]}", label="Job posting on verified website", method="json_ld", as_of=posted, confidence=0.9, extra={"source_system": "company_website", "date_posted": posted, "valid_through": valid, "url": obj.get("url") or page.fetched.final_url})
+                ledger.claim("hiring", "hiring.job_posting", title.strip()[:200], [ev], key=f"hiring.website_job.{title.strip().lower()[:80]}", label="Job posting on verified website", method="json_ld", as_of=posted, confidence=0.9, extra={"source_system": "company_website", "date_posted": posted, "valid_through": valid, "url": ad_url, "hiring_organization": organisation_name})
 
-    async def _publish_activity(self, ctx: CompanyContext, pages: list[Page], domain: str, deadline: float) -> None:
+    def _site_labels(self, home: Page, brand: str | None, domain: str) -> set[str]:
+        labels = {_norm(home.title), _norm(home.site_name), _norm(brand), domain_label(domain)}
+        anchors = {domain_label(domain)} | ({re.sub(r"[^a-z0-9æøå]", "", _norm(brand))} if brand else set())
+        for part in TITLE_SPLIT.split(home.title or ""):
+            if part and part.strip():
+                compact = re.sub(r"[^a-z0-9æøå]", "", _norm(part))
+                if any(anchor and anchor in compact for anchor in anchors):
+                    labels.add(_norm(part))
+        return {label for label in labels if label}
+
+    def _news_candidate_rejection(self, item: dict[str, Any], domain: str, labels: set[str]) -> str | None:
+        rule = news_url_rejection(item["url"], domain, item.get("page"))
+        if rule:
+            return rule
+        rule = news_title_rejection(item["title"], labels)
+        if rule:
+            return rule
+        if not item.get("date"):
+            return "news_no_publish_date"
+        if item.get("bulk"):
+            return "news_bulk_identical_dates"
+        return None
+
+    async def _publish_activity(self, ctx: CompanyContext, pages: list[Page], domain: str, deadline: float, home: Page | None = None, allow_feeds: bool = True, brand: str | None = None) -> None:
         ledger = ctx.ledger
+        home = home or pages[0]
         horizon = (date.today() - timedelta(days=3 * 365)).isoformat()
-        items: dict[str, dict[str, Any]] = {}
+        labels = self._site_labels(home, brand, domain)
+        candidates: list[dict[str, Any]] = []
         for page in pages:
             for obj in page.objects:
-                if extract.types_of(obj) & {"NewsArticle", "BlogPosting", "Article", "PressRelease", "Event"}:
+                if extract.types_of(obj) & extract.ARTICLE_TYPES:
                     headline = obj.get("headline") or obj.get("name")
-                    published = extract.parse_date(obj.get("datePublished") or obj.get("startDate"))
-                    url = obj.get("url") or page.fetched.final_url
-                    if isinstance(headline, str) and published and published >= horizon and isinstance(url, str):
-                        items.setdefault(extract.clean_url(urljoin(page.fetched.final_url, url)), {"title": headline.strip(), "date": published, "page": page, "method": "json_ld", "locator": "json-ld article"})
-            if page is not pages[0] and page.published and page.published >= horizon and NEWS_PATH.search(urlsplit(page.fetched.final_url).path) and page.title:
-                items.setdefault(extract.clean_url(page.fetched.final_url), {"title": page.title, "date": page.published, "page": page, "method": "article_metadata", "locator": "meta article:published_time"})
-        feed_urls = []
-        for page in pages:
-            feed_urls.extend(page.feeds)
-        feed_urls = list(dict.fromkeys(url for url in feed_urls if registered_domain(urlsplit(url).hostname or "") == domain and not re.search(r"comments?/feed", url)))[:2]
-        for url in feed_urls:
-            if time.monotonic() > deadline:
-                break
-            allowed, _ = await self.robots.allowed(url)
-            if not allowed:
-                continue
-            fetched = await self.fetcher.get(url, max_bytes=1_500_000, retries=0, timeout=10)
-            if not fetched.ok:
-                continue
-            for entry in extract.parse_feed(fetched.text(), fetched.final_url)[:25]:
-                if entry.get("date") and entry["date"] >= horizon and registered_domain(urlsplit(entry["url"]).hostname or "") == domain:
-                    items.setdefault(extract.clean_url(entry["url"]), {"title": entry["title"], "date": entry["date"], "fetched": fetched, "method": "rss_feed", "locator": "rss item"})
-        if len(items) < 3 and time.monotonic() < deadline:
-            await self._sitemap_news(ctx, pages[0], domain, horizon, items, deadline)
-        ranked = sorted(items.items(), key=lambda pair: pair[1]["date"], reverse=True)[:15]
+                    published = extract.parse_date(obj.get("datePublished"))
+                    raw_url = obj.get("url") if isinstance(obj.get("url"), str) else page.fetched.final_url
+                    if isinstance(headline, str) and headline.strip():
+                        url = urljoin(page.fetched.final_url, raw_url)
+                        candidates.append({"url": url, "title": headline.strip(), "date": published, "date_source": "json-ld datePublished" if published else None, "fetched": page.fetched, "page": page if extract.clean_url(url) == extract.clean_url(page.fetched.final_url) else None, "method": "json_ld", "locator": "json-ld article datePublished"})
+            if page is not home and page.title and (NEWS_PATH.search(urlsplit(page.fetched.final_url).path) or extract.url_date(page.fetched.final_url)):
+                candidates.append({"url": page.fetched.final_url, "title": page.title, "date": page.published, "date_source": page.published_source, "fetched": page.fetched, "page": page, "method": "article_metadata", "locator": page.published_source or "page"})
+        if allow_feeds:
+            feed_urls = []
+            for page in pages:
+                feed_urls.extend(page.feeds)
+            feed_urls = list(dict.fromkeys(url for url in feed_urls if registered_domain(urlsplit(url).hostname or "") == domain and not re.search(r"comments?/feed", url)))[:2]
+            for url in feed_urls:
+                if time.monotonic() > deadline:
+                    break
+                allowed, _ = await self.robots.allowed(url)
+                if not allowed:
+                    continue
+                fetched = await self.fetcher.get(url, max_bytes=1_500_000, retries=0, timeout=10)
+                if not fetched.ok:
+                    continue
+                entries = [entry for entry in extract.parse_feed(fetched.text(), fetched.final_url)[:25] if registered_domain(urlsplit(entry["url"]).hostname or "") == domain]
+                bulk = bulk_dated([entry["date"] for entry in entries if entry.get("date") and entry["date"] >= horizon])
+                for entry in entries:
+                    date_value = entry.get("date") or extract.url_date(entry["url"])
+                    candidates.append({"url": entry["url"], "title": entry["title"], "date": date_value, "date_source": entry.get("date_source") or ("date in URL" if date_value else None), "fetched": fetched, "page": None, "method": "rss_feed", "locator": entry.get("date_source") or "feed item", "bulk": bool(entry.get("date") and entry["date"] in bulk and not extract.url_date(entry["url"])), "modified": entry.get("modified")})
+        accepted = self._accept_news(ctx, candidates, domain, labels, horizon)
+        if allow_feeds and len(accepted) < 3 and time.monotonic() < deadline:
+            extra: list[dict[str, Any]] = []
+            await self._sitemap_news(ctx, home, domain, horizon, extra, deadline)
+            accepted = self._accept_news(ctx, candidates + extra, domain, labels, horizon)
+        ranked = sorted(accepted.items(), key=lambda pair: pair[1]["date"], reverse=True)
+        titles: set[str] = set()
+        published = 0
         for url, item in ranked:
-            fetched = item.get("fetched") or item["page"].fetched
-            ev = ledger.evidence_for(fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator=item["locator"], span=f"{item['date']} {item['title']}", method=item["method"])
-            ledger.claim("public_activity", "activity.website_news", item["title"][:240], [ev], key=f"activity.website_news.{url}", label="Dated item on verified company website", method=item["method"], as_of=item["date"], confidence=0.9, extra={"url": url, "published": item["date"]})
+            title_key = _norm(item["title"])
+            if title_key in titles:
+                ledger.withhold("news_duplicate_title", "activity.website_news", item["title"], url=url, fetched=item["fetched"])
+                continue
+            titles.add(title_key)
+            if published >= 15:
+                continue
+            ev = ledger.evidence_for(item["fetched"], source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator=item["locator"], span=f"{item['date']} {item['title']}", method=item["method"])
+            ledger.claim("public_activity", "activity.website_news", item["title"][:240], [ev], key=f"activity.website_news.{url}", label="Dated item on verified company website", method=item["method"], as_of=item["date"], confidence=0.9, extra={"url": url, "published": item["date"], "date_source": item.get("date_source")})
+            published += 1
 
-    async def _sitemap_news(self, ctx: CompanyContext, home: Page, domain: str, horizon: str, items: dict[str, dict[str, Any]], deadline: float) -> None:
+    def _accept_news(self, ctx: CompanyContext, candidates: list[dict[str, Any]], domain: str, labels: set[str], horizon: str) -> dict[str, dict[str, Any]]:
+        accepted: dict[str, dict[str, Any]] = {}
+        rejected: dict[str, tuple[str, dict[str, Any]]] = {}
+        for item in candidates:
+            url = extract.clean_url(item["url"])
+            if url in accepted:
+                continue
+            rule = self._news_candidate_rejection(item, domain, labels)
+            if rule:
+                rejected.setdefault(url, (rule, item))
+                continue
+            if item["date"] < horizon:
+                continue
+            accepted[url] = item
+        for url, (rule, item) in rejected.items():
+            if url not in accepted:
+                ctx.ledger.withhold(rule, "activity.website_news", item["title"], url=url, fetched=item["fetched"], detail=f"date {item.get('date') or item.get('modified') or 'none'} from {item.get('date_source') or ('modified/updated only' if item.get('modified') else 'no publish date')}")
+        return accepted
+
+    async def _sitemap_news(self, ctx: CompanyContext, home: Page, domain: str, horizon: str, items: list[dict[str, Any]], deadline: float) -> None:
         base = f"{urlsplit(home.fetched.final_url).scheme}://{urlsplit(home.fetched.final_url).netloc}"
         sitemaps = await self.robots.sitemaps(home.fetched.final_url) or [base + "/sitemap.xml"]
         queue = [url for url in sitemaps if registered_domain(urlsplit(url).hostname or "") == domain][:2]
@@ -905,8 +1285,7 @@ class WebsiteResearcher:
                     queue.append(child)
             for entry in urls:
                 if entry.get("lastmod") and entry["lastmod"] >= horizon and NEWS_PATH.search(urlsplit(entry["url"]).path) and registered_domain(urlsplit(entry["url"]).hostname or "") == domain:
-                    path = urlsplit(entry["url"]).path.rstrip("/")
-                    if NEWS_PATH.fullmatch(path + "/") or path.count("/") < 2:
+                    if news_url_rejection(entry["url"], domain):
                         continue
                     news_urls.append(entry)
         news_urls.sort(key=lambda entry: entry["lastmod"], reverse=True)
@@ -915,7 +1294,4 @@ class WebsiteResearcher:
                 break
             page, _ = await self.fetch_page(entry["url"], deadline)
             if page and page.title:
-                published = page.published or None
-                if published and published >= horizon:
-                    items.setdefault(extract.clean_url(page.fetched.final_url), {"title": page.title, "date": published, "page": page, "method": "article_metadata", "locator": "article published date"})
-
+                items.append({"url": page.fetched.final_url, "title": page.title, "date": page.published, "date_source": page.published_source, "fetched": page.fetched, "page": page, "method": "article_metadata", "locator": page.published_source or "page", "modified": entry.get("lastmod")})
