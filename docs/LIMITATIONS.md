@@ -8,7 +8,7 @@
 - Careers landing pages and recruitment-portal links are not published, so hiring coverage comes from NAV ads matched by employer organisation number and from JSON-LD job postings that name the company as hiring organisation.
 - News feeds whose items all carry the same few dates (site rebuilds, theme demo imports) are not used; the posts may be real but their dates are not publish dates.
 - NAV job ads are matched to a company through the advertised employer organisation number. Ads whose `businessName` differs from every registered name of the company and its subunits are not shortlisted, and ads published by staffing agencies on behalf of a client are attributed to the agency (as NAV records them).
-- The NAV feed is read from 90 days of changes; an ad that is still active but was last modified earlier is missed.
+- The NAV feed is read from 180 days of changes (`--nav-lookback-days`); an ad that is still active but was last modified earlier is missed.
 - Regnskapsregisteret's normalised API covers the latest three filing years; older years are reported only as "official copy on file" (from the filed-copy endpoint, which is limited by the provider to 30 requests per minute and therefore capped by `--filing-budget`).
 - Financial detail lines reported as exactly 0 by the normalised API (for example receivables or goodwill) are omitted rather than published, because the API uses 0 for lines that were not itemised; totals such as revenue, results, assets, equity and liabilities are published as reported, including real zeros.
 - Synthesis is a deterministic template over published claims; it does not interpret free text beyond quoting the registry activity and the company's own description.
