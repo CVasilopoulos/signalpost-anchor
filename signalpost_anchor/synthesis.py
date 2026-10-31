@@ -39,7 +39,7 @@ def _financial(ctx: CompanyContext, field: str, year: str, scope: str = "company
     return next((claim for claim in _claims(ctx, field) if claim.get("fiscal_year") == year and claim.get("account_scope") == scope), None)
 
 
-def build_synthesis(ctx: CompanyContext, changes: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def build_synthesis(ctx: CompanyContext, changes: list[dict[str, Any]] | None = None, refreshed: bool = False) -> dict[str, Any]:
     ledger = ctx.ledger
     paragraphs: list[dict[str, Any]] = []
 
@@ -107,6 +107,10 @@ def build_synthesis(ctx: CompanyContext, changes: list[dict[str, Any]] | None = 
         sentence += f" The company describes itself as: “{text[:200]}{'…' if len(text) > 200 else ''}” (company-provided copy)."
         ids.append(description[0]["id"])
     add("what_it_does", sentence, ids)
+    years = sorted({claim.get("fiscal_year") for claim in _claims(ctx, "financials.revenue") + _claims(ctx, "financials.annual_result") if claim.get("account_scope") == "company" and claim.get("fiscal_year")}, reverse=True)
+    glance, glance_ids = _key_points(ctx, years)
+    if glance:
+        add("key_points", "At a glance: " + "; ".join(glance) + ".", glance_ids)
 
     years = sorted({claim.get("fiscal_year") for claim in _claims(ctx, "financials.revenue") + _claims(ctx, "financials.annual_result") if claim.get("account_scope") == "company" and claim.get("fiscal_year")}, reverse=True)
     employees = _claims(ctx, "identity.employees")
@@ -231,14 +235,19 @@ def build_synthesis(ctx: CompanyContext, changes: list[dict[str, Any]] | None = 
             change_text.append(f"Since the previous run: {len(material)} material change{'s' if len(material) != 1 else ''} (" + "; ".join(change["summary"] for change in material[:4]) + ").")
         elif changes:
             change_text.append(f"Since the previous run: {len(changes)} minor update{'s' if len(changes) != 1 else ''}.")
-    if change_text:
-        add("what_changed", " ".join(change_text), change_ids)
+    elif refreshed:
+        change_text.append("Since the previous run: no change in the published facts.")
+    if not change_text:
+        change_text.append("No registry change in the last two years; this is the first run for this company, so there is no earlier snapshot to compare against.")
+    add("what_changed", " ".join(change_text), change_ids)
 
     signals = _signals(ctx, years)
     unknowns = _unknowns(ctx)
     if unknowns:
-        add("unknowns", "Not established: " + "; ".join(f"{item['label'].lower()} ({item['state'].replace('_', ' ')})" for item in unknowns) + ".", [])
-    summary = " ".join(paragraph["text"] for paragraph in paragraphs if paragraph["topic"] in ("what_it_does", "size_and_financials", "leadership"))
+        add("unknowns", "Not established: " + "; ".join(_unknown_text(item) for item in unknowns) + ".", [])
+    for paragraph in paragraphs:
+        paragraph["sources"] = _sources(ctx, paragraph["claim_ids"])
+    summary = " ".join(paragraph["text"] for paragraph in paragraphs if paragraph["topic"] in ("what_it_does", "key_points", "leadership"))
     return {
         "summary": summary,
         "paragraphs": paragraphs,
@@ -246,6 +255,96 @@ def build_synthesis(ctx: CompanyContext, changes: list[dict[str, Any]] | None = 
         "unknowns": unknowns,
         "method": "deterministic template over published claims (no language model); every sentence lists the claim ids it rests on",
     }
+
+
+def _unknown_text(item: dict[str, Any]) -> str:
+    text = f"{item['label'].lower()} ({item['state'].replace('_', ' ')})"
+    reason = (item.get("reason") or "").split("; ")[0].strip().rstrip(".")
+    if reason:
+        text += f": {reason[:160]}{'…' if len(reason) > 160 else ''}"
+    return text
+
+
+def _sources(ctx: CompanyContext, claim_ids: list[str], limit: int = 6) -> list[dict[str, str]]:
+    by_id = {claim["id"]: claim for claim in ctx.ledger.claims}
+    seen: dict[str, dict[str, str]] = {}
+    for claim_id in claim_ids:
+        for evidence_id in (by_id.get(claim_id) or {}).get("evidence_ids", []):
+            item = ctx.ledger.evidence.get(evidence_id)
+            if item and item.get("source_url") and item["source_url"] not in seen:
+                seen[item["source_url"]] = {"name": item.get("source_name") or "", "url": item["source_url"], "retrieved_at": item.get("retrieved_at") or ""}
+    return list(seen.values())[:limit]
+
+
+def _key_points(ctx: CompanyContext, years: list[str]) -> tuple[list[str], list[str]]:
+    points: list[str] = []
+    ids: list[str] = []
+    if ctx.entity_status != "active":
+        points.append(STATUS_TEXT.get(ctx.entity_status, "not active").replace("is ", "", 1).replace("has been ", "", 1))
+        ids += [claim["id"] for claim in _claims(ctx, "identity.status")]
+    founded = _claims(ctx, "identity.founded_date")
+    dated = founded or _claims(ctx, "identity.registered_date")
+    if dated and str(dated[0]["value"])[:4].isdigit():
+        year = int(str(dated[0]["value"])[:4])
+        age = date.today().year - year
+        points.append(f"{'founded' if founded else 'registered'} {year}" + (f" ({age} years ago)" if age >= 2 else ""))
+        ids.append(dated[0]["id"])
+    employees = _claims(ctx, "identity.employees")
+    if employees:
+        points.append(f"{employees[0]['value']} registered employees")
+        ids.append(employees[0]["id"])
+    if years:
+        latest = years[0]
+        revenue = _financial(ctx, "financials.revenue", latest)
+        operating = _financial(ctx, "financials.operating_result", latest)
+        result = _financial(ctx, "financials.annual_result", latest)
+        equity = _financial(ctx, "financials.equity", latest)
+        assets = _financial(ctx, "financials.total_assets", latest)
+        previous = _financial(ctx, "financials.revenue", years[1]) if len(years) > 1 else None
+        if revenue:
+            text = f"revenue {money(revenue['value'], revenue.get('unit', 'NOK'))} in {latest}"
+            ids.append(revenue["id"])
+            if previous and previous["value"]:
+                change = (revenue["value"] - previous["value"]) / abs(previous["value"]) * 100
+                text += f", {'up' if change >= 0 else 'down'} {abs(change):.0f}% on {years[1]}"
+                ids.append(previous["id"])
+            points.append(text)
+        if result:
+            text = f"annual result {money(result['value'], result.get('unit', 'NOK'))} in {latest}"
+            ids.append(result["id"])
+            if operating and revenue and revenue["value"] and revenue["value"] > 0:
+                text += f" (operating margin {operating['value'] / revenue['value'] * 100:.1f}%)"
+                ids.append(operating["id"])
+            points.append(text)
+        if equity and assets and assets["value"]:
+            if equity["value"] < 0:
+                points.append(f"negative equity ({money(equity['value'], equity.get('unit', 'NOK'))}) at the end of {latest}")
+            else:
+                points.append(f"equity {equity['value'] / assets['value'] * 100:.0f}% of total assets at the end of {latest}")
+            ids += [equity["id"], assets["id"]]
+    elif ctx.ledger.sections.get("annual_accounts", {}).get("state") not in (None, "available"):
+        points.append("no filed accounts available")
+    parent = _claims(ctx, "group.parent")
+    if parent:
+        points.append(f"owned by {parent[0]['value']}")
+        ids.append(parent[0]["id"])
+    jobs = _claims(ctx, "hiring.job_posting")
+    hiring = ctx.ledger.sections.get("hiring", {})
+    if jobs:
+        dates = sorted((claim.get("as_of") or "" for claim in jobs), reverse=True)
+        points.append(f"hiring: {len(jobs)} active job ad{'s' if len(jobs) != 1 else ''}" + (f", latest posted {dates[0]}" if dates[0] else ""))
+        ids += [claim["id"] for claim in jobs]
+    elif hiring.get("state") == "not_available" and "nav" in ctx.ledger.checked_sources:
+        points.append("no active job ads on NAV arbeidsplassen")
+    site = _claims(ctx, "website.official_url")
+    if site:
+        points.append(f"own website {site[0]['value']}")
+        ids.append(site[0]["id"])
+    news = sorted(_claims(ctx, "activity.website_news"), key=lambda claim: claim.get("as_of") or "", reverse=True)
+    if news and news[0].get("as_of"):
+        points.append(f"latest dated website post {news[0]['as_of']}")
+        ids.append(news[0]["id"])
+    return points, ids
 
 
 def _registry_changes(ctx: CompanyContext) -> tuple[list[str], list[str]]:

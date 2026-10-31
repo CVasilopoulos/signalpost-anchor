@@ -99,6 +99,38 @@ def site_researcher():
     return WebsiteResearcher(None, None)
 
 
+BAKSTRAUMEN_HOME = html(
+    """<nav>Sandsfossen Fiskerapportering øvre Høse Reisetips Fra Høse bru til Fiskeberget Overnatting Kontakt Vis mer</nav>
+<footer>Bakstraumen AS Fiskestrekninger Fiskerapportering Overnatting Reisetips Drevet av Webnode Personvernerklæring</footer>""",
+    "<title>Forside</title>",
+).replace("<html>", '<html lang="no">')
+
+FRUENE_HOME = html(
+    """<p>Les mer om vår café Følg oss på instagram Hold deg oppdatert med det siste som skjer hos Fruene.</p>
+<p>fruene.as Longyearbyen, Svalbard</p>""",
+    "<title>Fruene &#8211; Verdens nordligste kafé og sjokoladerie</title>",
+)
+
+STIB_HOME = html(
+    """<nav>Kontakt oss Ansatte Elevrådet Søk skoleplass SFO Foreldresiden For de ansatte</nav>
+<footer>5 Grav Gårdsvei Jar, Akershus, 1358 67162270</footer>""",
+    "<title>Steinerskolen i Bærum</title>",
+)
+
+NETSOLUTION_HOME = html(
+    """<p>Aderian i Norge – Sterke lokale teknologimiljøer – samlet i en nordisk plattform Flere nyheter</p>
+<footer>Netsolution Viken AS Kobbervikdalen 75 A, 3036 Drammen Netsolution Vestfold og Telemark AS Fjordgaten 13 B, 3125 Tønsberg +47 919 11 000
+<a href="https://www.linkedin.com/company/aderian">LinkedIn</a></footer>""",
+    "<title>Startsida - Aderian Netsolution</title>",
+)
+
+
+PROCONSULT_DK_HOME = html(
+    """<p>Projektledelse og rådgivning</p><footer>Kontaktinfo +45 4648 2060 office@proconsult.as CVR: 13309639 Copyright 2024 © All Right Reserved</footer>""",
+    "<title>Forside</title>",
+)
+
+
 def company(name: str, former: str | None = None, relatives: dict | None = None) -> CompanyContext:
     ctx = CompanyContext("000000000", Ledger("000000000"))
     ctx.entity = {"navn": name, "historiskeNavn": [{"navn": former, "tilDato": "2020-01-01"}] if former else []}
@@ -273,3 +305,47 @@ def test_careers_landing_pages_membership_links_and_portal_links_are_not_publish
         assert values(ctx, "website.official_url")
         assert values(ctx, "hiring.") == []
     assert set(withheld_rules(bygg, "hiring.").values()) == {"job_careers_landing_page", "job_recruitment_portal_link"}
+
+
+def test_name_derived_domain_is_verified_by_the_exact_legal_name_with_its_legal_form():
+    ctx = research("926363204", {"navn": "BAKSTRAUMEN AS", "organisasjonsform": {"kode": "AS"}}, {"https://bakstraumen.com/": BAKSTRAUMEN_HOME}, allow_guess=True)
+    site = next(claim for claim in ctx.ledger.claims if claim["field"] == "website.official_url")
+    assert site["value"] == "https://bakstraumen.com/"
+    assert site["method"] == "name_derived_domain_with_exact_legal_name"
+    evidence = ctx.ledger.evidence[site["evidence_ids"][0]]
+    assert "Bakstraumen AS" in evidence["claim_span"]
+
+
+def test_domain_text_or_the_name_without_its_legal_form_does_not_verify_a_name_derived_domain():
+    domain_text = research("986243348", {"navn": "FRUENE AS", "organisasjonsform": {"kode": "AS"}}, {"https://fruene.no/": FRUENE_HOME}, allow_guess=True)
+    name_only = research("926363204", {"navn": "BAKSTRAUMEN AS", "organisasjonsform": {"kode": "AS"}}, {"https://bakstraumen.com/": BAKSTRAUMEN_HOME.replace("Bakstraumen AS", "Bakstraumen")}, allow_guess=True)
+    assert values(domain_text, "website.official_url") == []
+    assert values(name_only, "website.official_url") == []
+
+
+def test_registry_listed_foundation_site_is_verified_by_its_name_without_stiftelsen_and_the_registry_phone():
+    entity = {"navn": "STIFTELSEN STEINERSKOLEN I BÆRUM", "organisasjonsform": {"kode": "STI"}, "hjemmeside": "www.stib.no", "telefon": "67 16 22 70", "forretningsadresse": {"adresse": ["Grav Gårdsvei 5"], "postnummer": "1358"}}
+    ctx = research("971521902", entity, {"https://www.stib.no/": STIB_HOME})
+    site = next(claim for claim in ctx.ledger.claims if claim["field"] == "website.official_url")
+    assert site["method"] == "registry_listed_and_name_without_organisation_type_match"
+    unrelated = research("971521902", {**entity, "telefon": None}, {"https://www.stib.no/": STIB_HOME.replace("<title>Steinerskolen i Bærum</title>", "<title>Velkommen</title>")})
+    assert values(unrelated, "website.official_url") == []
+
+
+def test_name_derived_site_that_also_presents_a_namesake_company_is_shared_and_keeps_its_profiles_to_proof_pages():
+    entity = {"navn": "NETSOLUTION VIKEN AS", "organisasjonsform": {"kode": "AS"}, "mobil": "91 91 10 00", "forretningsadresse": {"adresse": ["Kobbervikdalen 75"], "postnummer": "3036"}}
+    ctx = research("985628572", entity, {"https://netsolution.no/": NETSOLUTION_HOME}, allow_guess=True)
+    site = next(claim for claim in ctx.ledger.claims if claim["field"] == "website.official_url")
+    assert site["verification"]["site_scope"] == "shared"
+    assert "Netsolution Vestfold og Telemark AS" in site["verification"]["site_scope_reason"]
+    assert values(ctx, "profile.") == []
+
+
+def test_foreign_site_on_a_name_derived_domain_is_not_verified_by_an_email_address_or_a_foreign_as():
+    entity = {"navn": "PROCONSULT AS", "organisasjonsform": {"kode": "AS"}, "forretningsadresse": {"adresse": ["Storvannsveien 92"], "postnummer": "9603"}}
+    email_only = research("924776374", entity, {"https://proconsult.as/": PROCONSULT_DK_HOME}, allow_guess=True)
+    danish = PROCONSULT_DK_HOME.replace("<html>", '<html lang="da">').replace("<footer>", "<footer>Proconsult AS ")
+    foreign = research("924776374", entity, {"https://proconsult.as/": danish}, allow_guess=True)
+    assert values(email_only, "website.official_url") == []
+    assert values(foreign, "website.official_url") == []
+

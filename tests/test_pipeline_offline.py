@@ -324,3 +324,37 @@ def test_website_job_posting_is_published_only_when_the_hiring_organisation_is_t
     other, report = run_world(tmp_path / "other", {"hiring_org": "Barlindhaug AS"}, [ORG])
     assert not [c for c in by_org(other)[ORG]["claims"] if c.get("source_system") == "company_website"]
     assert any(item["rule"] == "job_hiring_organization_not_company" for item in report["_withheld_items"])
+
+
+def test_synthesis_gives_key_points_and_lists_the_sources_behind_each_paragraph(tmp_path):
+    envelopes, _ = run_world(tmp_path, {}, [ORG])
+    synthesis = by_org(envelopes)[ORG]["synthesis"]
+    topics = [paragraph["topic"] for paragraph in synthesis["paragraphs"]]
+    assert topics[:2] == ["what_it_does", "key_points"]
+    glance = synthesis["paragraphs"][1]
+    assert glance["text"].startswith("At a glance: registered 2010")
+    assert "own website https://consto.no/" in glance["text"]
+    claims = {claim["id"]: claim for claim in by_org(envelopes)[ORG]["claims"]}
+    assert glance["claim_ids"] and all(claim_id in claims for claim_id in glance["claim_ids"])
+    urls = {source["url"] for source in glance["sources"]}
+    assert any("data.brreg.no" in url for url in urls) and any(url.startswith("https://consto.no") for url in urls)
+    assert "At a glance" in synthesis["summary"]
+
+
+def test_synthesis_says_what_changed_on_a_first_run_and_on_a_refresh_without_changes(tmp_path):
+    out = tmp_path / "out"
+    first, _ = run_world(tmp_path, {}, [ORG], out)
+    changed = next(p for p in by_org(first)[ORG]["synthesis"]["paragraphs"] if p["topic"] == "what_changed")
+    assert "this is the first run for this company" in changed["text"]
+    second, _ = run_world(tmp_path, {}, [ORG], out)
+    changed = next(p for p in by_org(second)[ORG]["synthesis"]["paragraphs"] if p["topic"] == "what_changed")
+    assert "Since the previous run: no change in the published facts." in changed["text"]
+    assert not by_org(second)[ORG]["changes"]
+
+
+def test_unknowns_paragraph_gives_the_reason_for_each_gap(tmp_path):
+    envelopes, _ = run_world(tmp_path, {}, [OTHER])
+    synthesis = by_org(envelopes)[OTHER]["synthesis"]
+    unknowns = next(p for p in synthesis["paragraphs"] if p["topic"] == "unknowns")
+    assert "latest annual accounts and history (not available): Regnskapsregisteret returned no normalised accounts" in unknowns["text"]
+    assert next(p for p in synthesis["paragraphs"] if p["topic"] == "key_points")["text"].startswith("At a glance: registered as bankrupt (konkurs)")

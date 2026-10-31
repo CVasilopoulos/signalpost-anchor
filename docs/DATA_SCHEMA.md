@@ -14,7 +14,7 @@
 | `claims` | Atomic facts (see below). |
 | `evidence` | Claim-level evidence records (see below). |
 | `source_snapshots` | One record per fetched source document: requested and final URL, redirect chain, HTTP status, retrieval time, SHA-256, bytes, content type, source class, licence. Raw bytes are stored in `OUTPUT/snapshots/<sha[:2]>/<sha>.gz`. |
-| `synthesis` | `summary`, topic `paragraphs` (each with the `claim_ids` it rests on), `signals`, `unknowns`, `method`. |
+| `synthesis` | `summary`, topic `paragraphs` (`what_it_does`, `key_points`, `size_and_financials`, `leadership`, `footprint`, `what_changed`, `unknowns`; each with the `claim_ids` it rests on and `sources`, the source URLs, names and retrieval times behind those claims), `signals`, `unknowns`, `method`. `what_changed` is always present: registry changes in the last two years and changes since the previous run, or an explicit statement that there were none or that this is the first run. |
 | `unknowns` | Every section that is not `available`, with its state and reason. |
 | `changes` | Typed differences against the previous run (see `REFRESH.md`). |
 | `history` | Superseded claims together with the evidence that supported them. |

@@ -158,6 +158,11 @@ def domain_label_matches(name: str, domain: str) -> bool:
         variants.add("".join(part.translate(table) if len(part) <= 3 else part.translate(table)[0] for part in core if part))
     plain = "".join(core)
     variants.add(plain)
+    for words in _hyphenated_words(name):
+        for table in (TRANSLIT, TRANSLIT_ALT):
+            compound = "".join(word.translate(table) for word in words)
+            if len(compound) >= 6:
+                variants.add(compound)
     if label in variants:
         return True
     distinct = [part.lower().translate(TRANSLIT) for part in distinctive_tokens(name)]
@@ -186,7 +191,15 @@ def _domain_bases(parts: list[str]) -> list[tuple[str, str]]:
     return bases
 
 
-def guess_domains(name: str, limit: int = 10) -> list[str]:
+def _hyphenated_words(name: str) -> list[list[str]]:
+    words = []
+    for word in re.split(r"\s+", (name or "").lower()):
+        if re.fullmatch(r"[\wæøå]+(-[\wæøå]+)+", word) and word.upper().replace("-", "") not in LEGAL_SUFFIXES:
+            words.append(word.split("-"))
+    return words
+
+
+def guess_domains(name: str, limit: int = 14) -> list[str]:
     core = [part.lower() for part in core_tokens(name)]
     distinct = [part.lower() for part in distinctive_tokens(name)]
     if not core or not distinct:
@@ -196,6 +209,13 @@ def guess_domains(name: str, limit: int = 10) -> list[str]:
     full_bases = _domain_bases(full)
     distinct_bases = _domain_bases(distinct) if len(distinct) < len(full) else []
     prefix_bases = _domain_bases(full[:2]) if len(full) >= 3 else []
+    initials = 0
+    while initials < len(full) and len(full[initials]) == 1 and full[initials].isalpha():
+        initials += 1
+    merged = ["".join(full[:initials])] + full[initials:] if 2 <= initials < len(full) else []
+    merged_bases = [(kind, base) for kind, base in _domain_bases(merged) if "-" not in base or base.count("-") == 1] if merged else []
+    hyphen_bases = [(kind, base) for words in _hyphenated_words(name)[:1] for kind, base in _domain_bases(words) if "-" in base]
+    first = full[0] if len(full) >= 2 and len(full[0]) >= 8 and full[0].upper() in {token for token in distinctive_tokens(name)} else None
 
     def pick(bases: list[tuple[str, str]], kind: str, hyphen: bool | None = None) -> list[str]:
         return [base for k, base in bases if k == kind and (hyphen is None or ("-" in base) == hyphen)]
@@ -212,8 +232,30 @@ def guess_domains(name: str, limit: int = 10) -> list[str]:
         domains += [f"{base}.as" for base in pick(full_bases, "ascii", False)[:1]]
     domains += [f"{base}.no" for base in pick(distinct_bases, "idn", False)[:1]]
     domains += [f"{base}.com" for base in pick(distinct_bases, "ascii", False)[:1]]
+    domains = list(dict.fromkeys(domains))[:10]
+    domains += [f"{base}.no" for base in pick(merged_bases, "ascii")]
+    domains += [f"{base}.no" for base in pick(hyphen_bases, "ascii")[:1]]
+    if first:
+        domains += [f"{base}.no" for base in pick(_domain_bases([first]), "ascii")[:1]]
     unique = list(dict.fromkeys(domains))
     return unique[:limit]
+
+
+ORG_TYPE_TRIM_PREFIXES = {"STIFTELSEN", "STIFTINGA", "FORENINGEN", "ANDELSLAGET", "LAGET"}
+
+
+def name_without_org_type(name: str) -> str | None:
+    parts = tokens(name)
+    if not parts or parts[0] not in ORG_TYPE_TRIM_PREFIXES:
+        return None
+    rest = parts[1:]
+    while rest and rest[0] in ("TIL", "AV", "FOR"):
+        rest = rest[1:]
+    core = [part for part in rest if part not in LEGAL_SUFFIXES and part != "&"]
+    distinct = [part for part in core if part not in GENERIC_TOKENS and len(part) >= 3 and not part.isdigit()]
+    if not distinct or (len(core) < 2 and len("".join(core)) < 8):
+        return None
+    return " ".join(rest)
 
 
 def registered_domain(host: str) -> str:
@@ -363,3 +405,24 @@ def exact_name_span(name: str, text: str, before: int = 40, after: int = 80) -> 
         return None
     start = max(0, match.start() - before)
     return re.sub(r"\s+", " ", text[start: match.end() + after]).strip()
+
+
+def legal_name_span(name: str, text: str, before: int = 40, after: int = 80) -> str | None:
+    words = [part for part in tokens(name) if part]
+    if len("".join(words)) < 4 or not any(word in LEGAL_SUFFIXES for word in words):
+        return None
+    parts = []
+    for word in words:
+        if word in ("&", "+", "OG"):
+            parts.append(r"(?:&|og|\+|and)")
+        elif word in LEGAL_SUFFIXES:
+            parts.append(r"(?-i:" + re.escape(word) + ")")
+        else:
+            parts.append(re.escape(word))
+    pattern = re.compile(r"(?<![\wæøå.@/])" + r"(?:[\s\u00a0]+|[\s\u00a0]*[-/][\s\u00a0]*)".join(parts) + r"(?![\wæøå]|\.[a-zæøå])", re.I)
+    match = pattern.search(text or "")
+    if not match:
+        return None
+    start = max(0, match.start() - before)
+    return re.sub(r"\s+", " ", text[start: match.end() + after]).strip()
+

@@ -37,7 +37,7 @@
     hiring: "Hiring", public_activity: "Public activity", contact: "Contact", external_identifiers: "External identifiers"
   };
   const TOPIC_TITLE = {
-    what_it_does: "What it does", size_and_financials: "Size and financials", leadership: "Leadership",
+    what_it_does: "What it does", key_points: "At a glance", size_and_financials: "Size and financials", leadership: "Leadership",
     footprint: "Public footprint", what_changed: "Recent changes", unknowns: "Not established", hiring: "Hiring"
   };
   const SIGNAL_TEXT = {

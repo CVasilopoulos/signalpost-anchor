@@ -7,6 +7,7 @@ from signalpost_anchor.names import (
     guess_domains,
     name_in_text,
     name_span,
+    name_without_org_type,
     registered_domain,
     valid_orgnr,
 )
@@ -55,13 +56,29 @@ def test_domain_guesses_add_idn_legal_suffix_and_short_forms():
     assert "sorlandetsbatas.no" not in guess_domains("SØRLANDETS BÅT SA")
     assert "oddvarhagen.no" in guess_domains("ODDVAR HAGEN GARTNERI OG BLOMSTER AS")
     assert guess_domains("AS BØE & LEPSØY")[0] == "boelepsoy.no"
-    assert all(len(guess_domains(name)) <= 10 for name in ("VIGSNÆS + KOSBERG ++ ARKITEKTER AS", "C OPTIKK EIDSVOLL AS"))
+    assert all(len(guess_domains(name)) <= 14 for name in ("VIGSNÆS + KOSBERG ++ ARKITEKTER AS", "C OPTIKK EIDSVOLL AS"))
+
+
+def test_domain_guesses_keep_hyphenated_words_merge_initials_and_try_a_long_first_word():
+    assert "sjo-sport.no" in guess_domains("SJØ-SPORT MANDAL AS")
+    assert "pe-gaarud.no" in guess_domains("P.E. GAARUD AS")
+    assert "netsolution.no" in guess_domains("NETSOLUTION VIKEN AS")
+
+
+def test_name_without_organisation_type_needs_a_distinctive_remainder():
+    assert name_without_org_type("STIFTELSEN STEINERSKOLEN I BÆRUM") == "STEINERSKOLEN I BÆRUM"
+    assert name_without_org_type("STIFTELSEN NASJONAL JAZZSCENE") == "NASJONAL JAZZSCENE"
+    assert name_without_org_type("STIFTELSEN BYGG") is None
+    assert name_without_org_type("SAMEIET ULLEVÅLSVEIEN 51") is None
+    assert name_without_org_type("OPPIBERG AS") is None
 
 
 def test_domain_label_matching_handles_norwegian_letters_and_acronyms():
     assert domain_label_matches("ANTIKVARIAT BRYGGEN AS", "antikvariat-bryggen.no")
     assert domain_label_matches("VERDAL KABEL TV AS", "vktv.no")
     assert domain_label_matches("SØRLANDETS BÅT AS", "sorlandetsbat.no")
+    assert domain_label_matches("SJØ-SPORT MANDAL AS", "sjo-sport.no")
+    assert not domain_label_matches("A-B MASKINTJENESTER AS", "a-b.no")
     assert not domain_label_matches("OVESEN INVEST AS", "ferdighus.no")
 
 

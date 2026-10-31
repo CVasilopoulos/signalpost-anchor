@@ -239,8 +239,8 @@ async def run_batch(options: Options, fetcher_factory: Any = None) -> tuple[list
             }
             envelope = build_envelope(ctx, dict(run_meta), synthesis, operations, record)
             envelope = apply_refresh(envelope, previous.get(org))
-            if envelope["changes"]:
-                envelope["synthesis"] = build_synthesis(ctx, envelope["changes"])
+            if envelope["changes"] or not envelope["refresh"].get("is_first_run", True):
+                envelope["synthesis"] = build_synthesis(ctx, envelope["changes"], refreshed=True)
             envelopes.append(envelope)
         except Exception as exc:
             envelopes.append(apply_refresh(failure_envelope(org, record, run_meta, f"envelope assembly failed: {type(exc).__name__}: {exc}"), None))
@@ -373,6 +373,8 @@ def run(options: Options) -> int:
     output = options.output
     write_jsonl(output / "envelopes.jsonl", envelopes)
     write_jsonl(output / "withheld.jsonl", report.pop("_withheld_items", []))
+    if options.site:
+        report["site"] = {"index": "site/index.html", "companies": len(envelopes), "how_to_open": "open site/index.html in any browser, from the file system, on desktop or mobile; no server or network needed"}
     (output / "run-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
     if options.site:
         from .site import build_site
@@ -380,6 +382,7 @@ def run(options: Options) -> int:
         try:
             build_site(envelopes, report, output / "site")
         except Exception as exc:
+            report.pop("site", None)
             report["site_error"] = f"{type(exc).__name__}: {exc}"
             (output / "run-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
     summary = {
@@ -392,6 +395,7 @@ def run(options: Options) -> int:
         "requests": report["operations"]["requests"],
         "claims": report["claims"]["total"],
         "output": str(output),
+        "site": str(output / "site" / "index.html") if report.get("site") else None,
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0 if report["validation"]["passed"] else 2

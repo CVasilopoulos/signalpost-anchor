@@ -26,13 +26,16 @@ from ..names import (
     guess_domains,
     handle_match,
     handle_variants,
+    legal_name_span,
     name_forms,
     name_in_text,
     name_span,
+    name_without_org_type,
     names_forms,
     orgnr_context,
     registered_domain,
     simplify,
+    tokens,
     valid_orgnr,
 )
 from ..robots import RobotsCache
@@ -42,6 +45,7 @@ SOURCE_PRIORITY = {"registry": 0, "previous": 1, "wikidata": 2, "nav": 3, "subun
 TRUSTED_SOURCES = ("registry", "previous", "wikidata", "nav", "subunit_registry")
 DEFAULT_PATHS = ("/kontakt", "/om-oss", "/contact", "/about")
 GUESS_SOURCES = ("guess", "subunit_guess", "former_name_guess")
+UNIQUE_NAME_FORMS = {"AS", "ASA", "SA", "ANS", "DA", "KS", "BA"}
 REGISTRY_LINK_HOSTS = re.compile(r"(^|\.)(brreg\.no|proff\.no|purehelp\.no|regnskapstall\.no|forvalt\.no)$", re.I)
 IDENTITY_LINK_PRIORITY = (
     re.compile(r"kontakt|contact", re.I),
@@ -272,6 +276,37 @@ def strict_label_match(name: str, domain: str) -> bool:
     return bool(full) and len(label) >= 5 and label in options
 
 
+def exact_legal_name_proof(ctx: CompanyContext, pages: list[Any]) -> tuple[Any, str] | None:
+    if ctx.legal_form not in UNIQUE_NAME_FORMS or not any(part in LEGAL_SUFFIXES for part in tokens(ctx.name)) or not distinctive_tokens(ctx.name):
+        return None
+    for page in pages:
+        found = legal_name_span(ctx.name, page.text) or legal_name_span(ctx.name, " ".join(filter(None, [page.title, page.site_name])))
+        if found:
+            return page, found
+    return None
+
+
+def norwegian_site(domain: str, pages: list[Any], contact_match: bool) -> bool:
+    if domain.endswith(".no") or contact_match:
+        return True
+    return any(re.split(r"[-_]", (page.lang or "").lower())[0] in ("no", "nb", "nn") for page in pages)
+
+
+def namesake_companies(ctx: CompanyContext, pages: list[Any]) -> list[str]:
+    own = {simplify(name) for name in ctx.own_names()}
+    found: dict[str, str] = {}
+    for token in distinctive_tokens(ctx.name)[:1]:
+        if len(token) < 4 or not core_tokens_for(ctx.name) or core_tokens_for(ctx.name)[0] != token:
+            continue
+        pattern = re.compile(r"(?<![\wæøåÆØÅ])(?i:" + re.escape(token) + r")(?:[ \u00a0]+(?:[A-ZÆØÅ0-9][\wæøåÆØÅ\-]*|og|&)){0,4}?[ \u00a0]+(?:AS|ASA|SA)(?![\wæøåÆØÅ])")
+        for page in pages:
+            for match in pattern.finditer(page.text):
+                key = simplify(match.group(0))
+                if key not in own and len(found) < 5:
+                    found.setdefault(key, re.sub(r"\s+", " ", match.group(0)).strip())
+    return list(found.values())
+
+
 def assessment_previous_ok(name_on_text: bool, phone_match: bool, address_match: bool, label_match: bool) -> bool:
     return name_on_text or (address_match and label_match)
 
@@ -454,8 +489,15 @@ class WebsiteResearcher:
             result.update(verified=True, method="previously_verified_and_name_or_contact_match", page=span_page, span=span or (pages[0].title or ""))
             return result
         if source in ("registry", "wikidata", "nav", "subunit_registry"):
+            short = name_without_org_type(name)
+            short_span = None
+            if short and not name_on_text and (name_in_text(short, title_text) or ((phone_match or address_match) and name_in_text(short, texts))):
+                short_span = next(((page, found) for page in pages for found in [name_span(short, page.text) or name_span(short, " ".join(filter(None, [page.title, page.site_name])))] if found), None)
             if name_on_text or (address_match and label_match):
                 result.update(verified=True, method=f"{source}_listed_and_{'name' if name_on_text else 'address'}_match", page=span_page, span=span or (pages[0].title or ""))
+            elif short_span:
+                result["signals"].append("name_without_organisation_type_on_site")
+                result.update(verified=True, method=f"{source}_listed_and_name_without_organisation_type_match", page=short_span[0], span=short_span[1])
             elif phone_match or address_match:
                 result["conflict"] = "registered phone or address appears but the company name does not (likely a manager, accountant or group site)"
             elif label_match and strict_label_match(name, candidate["domain"]):
@@ -470,7 +512,19 @@ class WebsiteResearcher:
         if source == "guess":
             if name_on_title and label_match and (phone_match or address_match):
                 result.update(verified=True, method="name_derived_domain_with_name_and_contact_match", page=span_page, span=span or (pages[0].title or ""))
+            elif name_on_text and label_match and norwegian_site(candidate["domain"], pages, phone_match or address_match):
+                exact = exact_legal_name_proof(ctx, pages)
+                if exact:
+                    result["signals"].append("exact_legal_name_on_site")
+                    result.update(verified=True, method="name_derived_domain_with_exact_legal_name", page=exact[0], span=exact[1])
             return result
+        if source == "subunit_guess" and candidate.get("name_basis"):
+            basis = candidate["name_basis"]
+            if domain_label_matches(basis, candidate["domain"]) and name_in_text(basis, title_text) and norwegian_site(candidate["domain"], pages, phone_match or address_match):
+                exact = exact_legal_name_proof(ctx, pages)
+                if exact:
+                    result["signals"] += ["subunit_name_in_title", "exact_legal_name_on_site"]
+                    result.update(verified=True, method="subunit_name_domain_with_exact_legal_name", page=exact[0], span=exact[1])
         return result
 
     async def research(self, ctx: CompanyContext, only_sources: set[str] | None = None, exclude_domains: set[str] | None = None) -> None:
@@ -694,12 +748,18 @@ class WebsiteResearcher:
         own_proof = bool(all_orgnrs & own_numbers)
         names_company = self.identity_names_company(ctx, pages)
         domain_match = self.domain_matches_company(ctx, candidate["domain"], candidate["source"])
+        siblings = sorted({item["name"] for item in ctx.group_relatives.values() if item.get("relation") == "sibling" and item.get("name") and any(legal_name_span(item["name"], page.text) for page in pages)})
+        if not own_proof:
+            relatives = {simplify(name) for name in ctx.relative_names()}
+            siblings += [name for name in namesake_companies(ctx, pages) if simplify(name) not in relatives and name.upper() not in siblings]
         info: dict[str, Any] = {"own_proof": own_proof, "others": others[:5], "identity_names_company": names_company, "domain_matches_company": domain_match}
         identity = "; ".join(self.identity_texts(pages)[:2])[:120] or candidate["domain"]
         if candidate.get("off_site_page"):
             info.update(scope="group", reason=f"the company's page sits on another organisation's website ({candidate['off_site_page']})")
-        elif not others and (own_proof or names_company or domain_match):
+        elif not others and not siblings and (own_proof or names_company or domain_match):
             info.update(scope="own", reason=None)
+        elif not others and siblings and (own_proof or names_company or domain_match):
+            info.update(scope="shared", reason=f"site also presents other compan{'ies' if len(siblings) > 1 else 'y'}: {', '.join(siblings[:3])}")
         elif own_proof or names_company:
             info.update(scope="shared", reason=f"site also shows organisation number(s) {', '.join(others[:3])}")
         elif others:
