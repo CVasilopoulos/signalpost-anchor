@@ -2,16 +2,16 @@
   "report_version": "signalpost-anchor-run-report/1.0",
   "agent": {
     "name": "Signalpost Anchor",
-    "version": "1.2.0"
+    "version": "1.3.0"
   },
   "run": {
-    "run_id": "run-20261023T085149",
-    "started_at": "2026-10-23T08:51:49.428Z",
-    "completed_at": "2026-10-23T08:53:38.343Z",
+    "run_id": "run-20261031T170546",
+    "started_at": "2026-10-31T17:05:46.294Z",
+    "completed_at": "2026-10-31T17:07:36.667Z",
     "terminal_status": "completed",
     "agent": "Signalpost Anchor",
-    "agent_version": "1.2.0",
-    "evidence_cutoff": "2026-10-23T08:53:38.343Z"
+    "agent_version": "1.3.0",
+    "evidence_cutoff": "2026-10-31T17:07:36.667Z"
   },
   "environment": {
     "python": "3.12.15",
@@ -68,13 +68,13 @@
       "not_available": 4
     },
     "website": {
-      "available": 28,
-      "not_available": 68,
+      "available": 31,
+      "not_available": 65,
       "ambiguous": 4
     },
     "company_profiles": {
-      "not_available": 85,
-      "available": 15
+      "not_available": 84,
+      "available": 16
     },
     "hiring": {
       "not_available": 98,
@@ -84,8 +84,8 @@
       "available": 100
     },
     "contact": {
-      "available": 68,
-      "not_available": 32
+      "available": 69,
+      "not_available": 31
     },
     "external_identifiers": {
       "available": 100
@@ -96,38 +96,38 @@
     "annual_accounts": 96,
     "leadership": 96,
     "registered_workplaces": 90,
-    "verified_website": 28,
-    "company_profiles": 15,
+    "verified_website": 31,
+    "company_profiles": 16,
     "hiring_any": 2,
     "job_postings": 2,
-    "website_news": 5,
+    "website_news": 6,
     "registry_activity": 97,
-    "contact": 68,
+    "contact": 69,
     "lei": 13,
     "wikidata": 5,
-    "public_brand": 26
+    "public_brand": 29
   },
   "coverage_share": {
     "official_identity": 1.0,
     "annual_accounts": 0.96,
     "leadership": 0.96,
     "registered_workplaces": 0.9,
-    "verified_website": 0.28,
-    "company_profiles": 0.15,
+    "verified_website": 0.31,
+    "company_profiles": 0.16,
     "hiring_any": 0.02,
     "job_postings": 0.02,
-    "website_news": 0.05,
+    "website_news": 0.06,
     "registry_activity": 0.97,
-    "contact": 0.68,
+    "contact": 0.69,
     "lei": 0.13,
     "wikidata": 0.05,
-    "public_brand": 0.26
+    "public_brand": 0.29
   },
   "claims": {
-    "total": 12084,
-    "per_company_mean": 120.8,
+    "total": 12107,
+    "per_company_mean": 121.1,
     "by_field": {
-      "financials.filed_copy": 539,
+      "financials.filed_copy": 542,
       "activity.role_group_changed": 295,
       "financials.annual_result": 279,
       "financials.total_assets": 279,
@@ -192,27 +192,27 @@
       "identity.vat_registered_in_register_date": 68,
       "leadership.ceo": 66,
       "group.subsidiary": 56,
-      "identity.former_name": 53,
-      "financials.filed_copy_years": 51,
+      "identity.former_name": 54,
+      "financials.filed_copy_years": 52,
       "leadership.auditor": 51,
       "leadership.board_deputy_member": 49,
       "identity.employees": 41,
       "contact.registry_email": 39,
-      "activity.website_news": 36,
+      "activity.website_news": 38,
       "activity.registry_event": 35,
       "contact.registry_phone": 34,
       "contact.website_email": 34,
       "contact.registry_mobile": 31,
-      "website.official_url": 28,
-      "website.title": 27,
-      "website.language": 26,
+      "website.official_url": 31,
+      "website.title": 30,
+      "website.language": 29,
+      "identity.public_brand": 29,
       "contact.postal_address": 26,
       "financials.investments": 26,
-      "identity.public_brand": 26,
-      "location.website_address": 24,
-      "contact.website_phone": 24,
+      "location.website_address": 25,
       "financials.goodwill": 23,
-      "website.description": 16,
+      "contact.website_phone": 23,
+      "website.description": 18,
       "website.registry_listed": 14,
       "leadership.named_on_website": 14,
       "identifier.lei": 13,
@@ -225,9 +225,9 @@
       "activity.registry_vat_status_change": 11,
       "identity.voluntary_vat_registered_date": 10,
       "activity.registry_articles_updated": 10,
-      "profile.linkedin": 10,
+      "profile.instagram": 10,
       "activity.registry_industry_change": 9,
-      "profile.instagram": 9,
+      "profile.linkedin": 9,
       "activity.registry_liquidation": 9,
       "identifier.wikipedia_article": 8,
       "website.logo": 8,
@@ -245,18 +245,18 @@
       "identity.deleted_date": 4,
       "identity.auxiliary_unit_code": 3,
       "activity.registry_postal_address_change": 3,
+      "activity.registry_name_change": 3,
       "group.ultimate_parent": 3,
       "group.parent": 3,
+      "location.opening_hours": 3,
       "website.about_description": 3,
       "leadership.contact_person": 2,
       "leadership.parent_foreign_entity": 2,
-      "location.opening_hours": 2,
       "profile.x": 2,
       "hiring.job_posting": 2,
       "identity.employer_self_description": 2,
       "hiring.active_job_ads_nav": 2,
       "activity.registry_phone_change": 2,
-      "activity.registry_name_change": 2,
       "activity.registry_legal_form_change": 2,
       "activity.registry_forced_dissolution": 2,
       "identifier.isin": 1,
@@ -268,12 +268,12 @@
     }
   },
   "website_verification_methods": {
-    "registry_email_domain_and_name_match": 4,
+    "registry_email_domain_and_name_match": 5,
     "registry_listed_and_name_match": 5,
-    "wikidata_listed_and_name_match": 1,
     "subunit_registry_listed_and_name_match": 1,
-    "organisation_number_on_site": 12,
-    "name_derived_domain_with_name_and_contact_match": 5
+    "name_derived_domain_with_exact_legal_name": 3,
+    "organisation_number_on_site": 14,
+    "name_derived_domain_with_name_and_contact_match": 3
   },
   "changes": {
     "total": 0,
@@ -284,16 +284,16 @@
     "enabled": true,
     "state": "complete",
     "token_source": "NAV published public token (api/publicToken)",
-    "pages_read": 368,
+    "pages_read": 356,
     "segments": 16,
     "lookback_days": 180,
-    "newest_change_seen": "2026-10-23T10:51:08.665682+02:00",
-    "ads_indexed": 89576,
-    "active_ads_indexed": 10006,
+    "newest_change_seen": "2026-10-31T16:29:32.627837+01:00",
+    "ads_indexed": 86965,
+    "active_ads_indexed": 10120,
     "error": null,
-    "candidates": 64,
+    "candidates": 63,
     "verified": 2,
-    "rejected_orgnr_mismatch": 62,
+    "rejected_orgnr_mismatch": 61,
     "inactive": 0,
     "errors": 0,
     "second_pass_companies": 1,
@@ -305,55 +305,61 @@
     "errors": []
   },
   "operations": {
-    "requests": 1448,
-    "bytes_received": 204648234,
-    "request_p50_ms": 230,
-    "request_p95_ms": 1073,
+    "requests": 1483,
+    "bytes_received": 202373176,
+    "request_p50_ms": 261,
+    "request_p95_ms": 1104,
     "top_hosts": {
-      "data.brreg.no": 557,
-      "pam-stilling-feed.nav.no": 433,
-      "www.nho.no": 14,
-      "webstep.no": 12,
+      "data.brreg.no": 558,
+      "pam-stilling-feed.nav.no": 420,
+      "www.nho.no": 13,
       "bcc.media": 12,
       "www.vk.no": 11,
       "www.dekkservice.no": 10,
       "www.jetro.no": 10,
-      "snorreseafood.no": 10,
       "vselement.no": 9,
       "www.technoalpin.com": 8,
-      "www.geiafood.com": 8
+      "idehytta.no": 8,
+      "www.geiafood.com": 8,
+      "www.walleniuswilhelmsen.com": 7
     },
     "transport_errors": {
-      "ConnectError": 25,
-      "ConnectTimeout": 16,
-      "ReadTimeout": 1
+      "ConnectError": 37,
+      "ConnectTimeout": 10,
+      "ReadTimeout": 4,
+      "RemoteProtocolError": 1
     },
-    "runtime_s": 109.1,
-    "company_runtime_p50_ms": 6413.245152216405,
-    "company_runtime_p95_ms": 24887.580615002662,
+    "runtime_s": 110.5,
+    "company_runtime_p50_ms": 3524.604788981378,
+    "company_runtime_p95_ms": 20285.404842346907,
     "third_party_cost_usd": 0.0,
     "llm_calls": 0,
     "paid_apis": []
   },
   "filing_copy_years": {
-    "companies_checked": 51,
+    "companies_checked": 52,
     "skipped_no_accounts": 4,
     "rate_limited": 0,
     "stopped_at_time_budget": true,
-    "pending": 46
+    "pending": 44
   },
   "withheld": {
     "total": 126,
-    "companies": 28,
+    "companies": 26,
     "by_rule": {
-      "job_employer_not_company": 62,
-      "social_handle_does_not_match_company": 17,
-      "job_careers_landing_page": 15,
+      "job_employer_not_company": 61,
+      "social_handle_does_not_match_company": 20,
+      "job_careers_landing_page": 13,
       "job_recruitment_portal_link": 12,
       "news_not_a_post_url": 8,
       "social_opaque_handle_unverifiable": 6,
       "news_no_publish_date": 4,
       "news_careers_or_membership_page": 2
     }
+  },
+  "site": {
+    "index": "site/index.html",
+    "companies": 100,
+    "how_to_open": "open site/index.html in any browser, from the file system, on desktop or mobile; no server or network needed"
   }
 }

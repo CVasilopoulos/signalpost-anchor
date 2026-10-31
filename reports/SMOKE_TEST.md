@@ -1,14 +1,14 @@
 # 100-company smoke test
 
-Run `run-20261023T085149`, agent Signalpost Anchor 1.2.0, completed 2026-10-23T08:53:38.343Z.
+Run `run-20261031T170546`, agent Signalpost Anchor 1.3.0, completed 2026-10-31T17:07:36.667Z.
 
 Command (clean `python:3.12-slim` container, empty virtual environment, only the declared install step):
 
 ```bash
-git clone https://github.com/CVasilopoulos/signalpost-anchor && cd signalpost-anchor && git checkout 184c4a1 && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/python -m signalpost_anchor run --input reports/smoke-100-companies.jsonl --output /runs/smoke
+git clone https://github.com/CVasilopoulos/signalpost-anchor && cd signalpost-anchor && git checkout c431d48 && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/python -m signalpost_anchor run --input reports/smoke-100-companies.jsonl --output /runs/smoke
 ```
 
-Machine: Linux x86-64 server; the repository was cloned on the host at the commit above, mounted read-only and copied into a fresh Docker python:3.12-slim container limited to 6 CPUs and 6 GB RAM, running as an unprivileged user; the test suite (68 tests) passed in the same kind of container before the run. Batch: `reports/smoke-100-companies.jsonl` (selection script `tools/select_smoke_batch.py`, seed 20261016).
+Machine: Linux x86-64 server; the repository was cloned on the host at the commit above, mounted read-only and copied into a fresh Docker python:3.12-slim container limited to 6 CPUs and 6 GB RAM, running as an unprivileged user; the test suite (78 tests) passed in the same kind of container before the run. Batch: `reports/smoke-100-companies.jsonl` (selection script `tools/select_smoke_batch.py`, seed 20261016).. Batch: `reports/smoke-100-companies.jsonl` (selection script `tools/select_smoke_batch.py`, seed 20261016).
 
 ## Contract checks
 
@@ -30,14 +30,14 @@ Machine: Linux x86-64 server; the repository was cloned on the host at the commi
 | Annual accounts | 96 (96%) |
 | Leadership roles | 96 (96%) |
 | Registered workplaces (subunits) | 90 (90%) |
-| Verified official website | 28 (28%) |
-| Public brand | 26 (26%) |
-| Company-owned social/video profiles | 15 (15%) |
+| Verified official website | 31 (31%) |
+| Public brand | 29 (29%) |
+| Company-owned social/video profiles | 16 (16%) |
 | Hiring (single job ads) | 2 (2%) |
 | Active job postings | 2 (2%) |
 | Dated registry activity | 97 (97%) |
-| Dated website news | 5 (5%) |
-| Contact details | 68 (68%) |
+| Dated website news | 6 (6%) |
+| Contact details | 69 (69%) |
 | LEI | 13 (13%) |
 | Wikidata item | 5 (5%) |
 
@@ -49,36 +49,36 @@ Machine: Linux x86-64 server; the repository was cloned on the host at the commi
 | annual_accounts | 94 | 0 | 4 | 0 | 0 | 2 |
 | leadership | 96 | 4 | 0 | 0 | 0 | 0 |
 | workplaces | 96 | 4 | 0 | 0 | 0 | 0 |
-| website | 28 | 68 | 0 | 4 | 0 | 0 |
-| company_profiles | 15 | 85 | 0 | 0 | 0 | 0 |
+| website | 31 | 65 | 0 | 4 | 0 | 0 |
+| company_profiles | 16 | 84 | 0 | 0 | 0 | 0 |
 | hiring | 2 | 98 | 0 | 0 | 0 | 0 |
 | public_activity | 100 | 0 | 0 | 0 | 0 | 0 |
-| contact | 68 | 32 | 0 | 0 | 0 | 0 |
+| contact | 69 | 31 | 0 | 0 | 0 | 0 |
 | external_identifiers | 100 | 0 | 0 | 0 | 0 | 0 |
 
 ## Volume, runtime and cost
 
 | Metric | Value |
 |---|---|
-| Claims published | 12084 (mean 120.8 per company) |
-| Website verification methods | registry_email_domain_and_name_match: 4, registry_listed_and_name_match: 5, wikidata_listed_and_name_match: 1, subunit_registry_listed_and_name_match: 1, organisation_number_on_site: 12, name_derived_domain_with_name_and_contact_match: 5 |
-| HTTP requests | 1448 (204.6 MB after decompression; the NAV feed is served gzip-compressed) |
-| Wall-clock runtime | 109.1 s |
-| Per-company research time p50 / p95 | 6.4 s / 24.9 s |
-| NAV feed | 368 pages, 10006 active ads indexed, 2 ads verified by employer number |
-| Filed-copy lookups | 51 companies |
+| Claims published | 12107 (mean 121.1 per company) |
+| Website verification methods | registry_email_domain_and_name_match: 5, registry_listed_and_name_match: 5, subunit_registry_listed_and_name_match: 1, name_derived_domain_with_exact_legal_name: 3, organisation_number_on_site: 14, name_derived_domain_with_name_and_contact_match: 3 |
+| HTTP requests | 1483 (202.4 MB after decompression; the NAV feed is served gzip-compressed) |
+| Wall-clock runtime | 110.5 s |
+| Per-company research time p50 / p95 | 3.5 s / 20.3 s |
+| NAV feed | 356 pages, 10120 active ads indexed, 2 ads verified by employer number |
+| Filed-copy lookups | 52 companies |
 | Third-party cost | USD 0.00 |
 | Language-model calls | 0 |
 
 ## Withheld items
 
-Items found but not published (126 across 28 companies; each listed in `withheld.jsonl` with the page URL and the content hash of the cached page):
+Items found but not published (126 across 26 companies; each listed in `withheld.jsonl` with the page URL and the content hash of the cached page):
 
 | Rule | Items |
 |---|---|
-| job_employer_not_company | 62 |
-| social_handle_does_not_match_company | 17 |
-| job_careers_landing_page | 15 |
+| job_employer_not_company | 61 |
+| social_handle_does_not_match_company | 20 |
+| job_careers_landing_page | 13 |
 | job_recruitment_portal_link | 12 |
 | news_not_a_post_url | 8 |
 | social_opaque_handle_unverifiable | 6 |
@@ -87,7 +87,7 @@ Items found but not published (126 across 28 companies; each listed in `withheld
 
 ## Refresh re-run
 
-The same command was run again on the same output directory (`run-20261023T085345`): 0 change records across 100 companies with a previous envelope (none), runtime 102.2 s.
+The same command was run again on the same output directory (`run-20261031T170745`): 0 change records across 100 companies with a previous envelope (none), runtime 97.9 s.
 
 ## Per company
 
@@ -97,12 +97,12 @@ The same command was run again on the same output directory (`run-20261023T08534
 | 988449962 | XRENT - KNUT OLSRUD MOSJØEN SNØSCOOTERUTLEIE | universe legal form ENK | available | 56 | not_available | 0 | 0 | 2025 | 3 |
 | 984587767 | ADVOKAT ERIK KR GUNDERSEN | universe legal form ENK | available | 110 | not_available | 0 | 0 | 2023, 2024, 2025 | 3 |
 | 995216604 | WALLENIUS WILHELMSEN ASA | universe legal form ASA | available | 295 | https://www.walleniuswilhelmsen.com/ (registry listed and name match) | 2 | 0 | 2023, 2024, 2025 | 1 |
-| 996394638 | WEBSTEP ASA | universe legal form ASA | available | 234 | https://webstep.no/ (wikidata listed and name match) | 3 | 0 | 2023, 2024, 2025 | 1 |
+| 996394638 | WEBSTEP ASA | universe legal form ASA | available | 222 | not_available | 0 | 0 | 2023, 2024, 2025 | 3 |
 | 961281504 | BORETTSLAGET HALDENS GATE 12 | universe legal form BRL | available | 116 | not_available | 0 | 0 | 2023, 2024, 2025 | 3 |
 | 975503917 | SAMEIET ST. HALVARDSGATE 25 D-F | universe legal form ESEK | available | 127 | not_available | 0 | 0 | 2023, 2024, 2025 | 3 |
 | 979239459 | FELLESLEGATET TIL FORDEL FOR UNIVERSITETSBIBLIOTEKET STI | universe legal form STI | available | 131 | not_available | 0 | 0 | — | 3 |
 | 926201948 | SOGN FRUKT OG GRØNT SA | universe legal form SA | available | 157 | https://www.sognfg.no/ (subunit registry listed and name match) | 2 | 0 | 2023, 2024, 2025 | 1 |
-| 915964796 | TECHNOALPIN NORDIC AB | universe legal form NUF | available | 115 | not_available | 0 | 0 | 2023, 2024, 2025 | 3 |
+| 915964796 | TECHNOALPIN NORDIC AB NUF | universe legal form NUF | available | 117 | not_available | 0 | 0 | 2023, 2024, 2025 | 3 |
 | 989432583 | TRIKANTEN AS | universe size band none | available | 130 | not_available | 0 | 0 | 2023, 2024, 2025 | 3 |
 | 980801403 | ROLF D HENRIKSEN AS | universe size band none | available | 130 | not_available | 0 | 0 | 2023, 2024, 2025 | 3 |
 | 924588683 | CAPABLEX AS | universe size band none | available | 125 | not_available | 0 | 0 | 2023, 2024, 2025 | 4 |
@@ -114,8 +114,8 @@ The same command was run again on the same output directory (`run-20261023T08534
 | 995627329 | RINGSTAD TERRASSE 2 BORETTSLAG | universe size band none | available | 119 | ambiguous | 0 | 0 | 2023, 2024, 2025 | 3 |
 | 997013670 | RIZKLAB SYSTEM AS | universe size band none | available | 111 | not_available | 0 | 0 | — | 3 |
 | 998332192 | ADVOKATFIRMAET JEGERSBERG & CO AS | universe size band none | available | 127 | ambiguous | 0 | 0 | 2023, 2024, 2025 | 3 |
-| 911429209 | EMBALLASJESERVICE AS | universe size band none | available | 128 | not_available | 0 | 0 | 2023, 2024, 2025 | 4 |
-| 814310892 | DANFENCER OMRÅDESIKRING AS | universe size band none | available | 122 | not_available | 0 | 0 | 2023, 2024, 2025 | 4 |
+| 911429209 | EMBALLASJESERVICE AS | universe size band none | available | 134 | https://www.emballasjeservice.no/ (name derived domain with exact legal name) | 0 | 0 | 2023, 2024, 2025 | 2 |
+| 814310892 | DANFENCER OMRÅDESIKRING AS | universe size band none | available | 131 | https://www.danfencer.no/ (organisation number on site) | 0 | 0 | 2023, 2024, 2025 | 2 |
 | 991165770 | SCANDINAVIAN CAPITAL AS | universe size band none | available | 138 | not_available | 0 | 0 | 2023, 2024, 2025 | 3 |
 | 936717071 | VIKEN HANDEL AS | universe size band none | available | 56 | not_available | 0 | 0 | 2025 | 4 |
 | 931267248 | FANT INVEST AS | universe size band none | available | 121 | not_available | 0 | 0 | 2023 | 3 |
@@ -141,13 +141,13 @@ The same command was run again on the same output directory (`run-20261023T08534
 | 833296922 | JG PLASTSVEIS AS | universe size band 5-19 | available | 111 | https://jgplastsveis.no/ (organisation number on site) | 0 | 0 | 2024, 2025 | 2 |
 | 979949707 | RAVN WEBVEVERIET AS | universe size band 5-19 | available | 149 | https://www.ravn.no/ (organisation number on site) | 0 | 0 | 2023, 2024, 2025 | 2 |
 | 924317140 | LANGVED BLIKKENSLAGERVERKSTED AS | universe size band 5-19 | available | 140 | not_available | 0 | 0 | 2023, 2024, 2025 | 4 |
-| 990463360 | IDEHYTTA AS | universe size band 5-19 | available | 144 | not_available | 0 | 0 | 2023, 2024, 2025 | 3 |
+| 990463360 | IDEHYTTA AS | universe size band 5-19 | available | 154 | https://idehytta.no/ (registry email domain and name match) | 2 | 0 | 2023, 2024, 2025 | 1 |
 | 984662335 | MOGLEG AS | universe size band 5-19 | available | 158 | https://www.mogleg.no/ (name derived domain with name and contact match) | 2 | 0 | 2023, 2024, 2025 | 1 |
-| 930873802 | LÆRINGSVERKSTEDET MATTISGÅRDEN NATURBARNEHAGE AS | universe size band 5-19 | available | 105 | not_available | 0 | 0 | 2023, 2024 | 3 |
+| 930873802 | LÆRINGSVERKSTEDET MATTISGÅRDEN NATURBARNEHAGE AS | universe size band 5-19 | available | 109 | not_available | 0 | 0 | 2023, 2024 | 3 |
 | 918374493 | ELVERUM BILTRANSPORT AS | universe size band 5-19 | available | 142 | not_available | 0 | 0 | 2023, 2024, 2025 | 3 |
-| 917568863 | MYRSLETT AUTO AS | universe size band 5-19 | available | 128 | not_available | 0 | 0 | 2023, 2024, 2025 | 3 |
+| 917568863 | MYRSLETT AUTO AS | universe size band 5-19 | available | 136 | https://myrslettauto.com/ (organisation number on site) | 1 | 0 | 2023, 2024, 2025 | 1 |
 | 926403966 | FLEXID BYGG AS | universe size band 5-19 | available | 115 | https://www.flexidbygg.no/ (organisation number on site) | 0 | 0 | 2023, 2024, 2025 | 3 |
-| 986243348 | FRUENE AS | universe size band 5-19 | available | 140 | https://fruene.no/ (name derived domain with name and contact match) | 2 | 0 | 2023, 2024, 2025 | 1 |
+| 986243348 | FRUENE AS | universe size band 5-19 | available | 138 | https://fruene.no/ (name derived domain with exact legal name) | 2 | 0 | 2023, 2024, 2025 | 1 |
 | 988539678 | BULBITECH AS | universe size band 5-19 | available | 152 | https://www.bulbitech.com/ (registry email domain and name match) | 1 | 0 | 2023, 2024, 2025 | 1 |
 | 918473513 | SAMI MALER TJENESTER AS | universe size band 5-19 | available | 115 | not_available | 0 | 0 | 2023, 2024, 2025 | 3 |
 | 914141672 | PSS PROFESSIONAL SERVICE SOLUTION AS | universe size band 5-19 | available | 114 | not_available | 0 | 0 | 2023, 2024, 2025 | 4 |
@@ -172,7 +172,7 @@ The same command was run again on the same output directory (`run-20261023T08534
 | 976758218 | VS ELEMENT AS | universe size band 20-99 | available | 141 | https://vselement.no/ (registry listed and name match) | 0 | 0 | 2023, 2024, 2025 | 2 |
 | 879497752 | SNORRE SEAFOOD AS | universe size band 20-99 | available | 138 | https://snorreseafood.no/ (organisation number on site) | 1 | 0 | 2023, 2024, 2025 | 1 |
 | 912161668 | EVIDENSIA SMÅDYR AS | universe size band 100+ | available | 175 | not_available | 0 | 1 | 2023, 2024, 2025 | 3 |
-| 955600436 | NÆRINGSLIVETS HOVEDORGANISASJON | universe size band 100+ | available | 260 | https://www.nho.no/ (organisation number on site) | 5 | 0 | 2023, 2024, 2025 | 1 |
+| 955600436 | NÆRINGSLIVETS HOVEDORGANISASJON | universe size band 100+ | available | 261 | https://www.nho.no/ (organisation number on site) | 5 | 0 | 2023, 2024, 2025 | 1 |
 | 914719313 | VELOX ELECTRO NORDICS AS | universe size band 100+ | available | 139 | not_available | 0 | 0 | 2023, 2024, 2025 | 4 |
 | 964715378 | LAUGSTOL AS | universe size band 100+ | available | 154 | https://laugstol.no/ (organisation number on site) | 2 | 0 | 2023, 2024, 2025 | 1 |
 | 911935589 | VAKTMESTERKOMPANIET AS | universe size band 100+ | available | 167 | https://www.vk.no/ (organisation number on site) | 3 | 0 | 2023, 2024, 2025 | 1 |
@@ -181,7 +181,7 @@ The same command was run again on the same output directory (`run-20261023T08534
 | 927866153 | ALGETA AS | registry: bankrupt (konkurs) | available | 110 | not_available | 0 | 0 | 2022, 2023, 2024 | 4 |
 | 988015164 | ASHU EIENDOM AS | registry: bankrupt (konkurs) | available | 110 | not_available | 0 | 0 | 2021, 2022, 2023 | 3 |
 | 976047869 | ASKVOLL EIGEDOMSSELSKAP AS | registry: bankrupt (konkurs) | available | 109 | not_available | 0 | 0 | — | 3 |
-| 982315387 | ACCEPT ELEKTRO OG AUTOMASJON AS | registry: bankrupt (konkurs) | available | 120 | https://acceptelektro.no/ (name derived domain with name and contact match) | 0 | 0 | 2022, 2023, 2024 | 2 |
+| 982315387 | ACCEPT ELEKTRO OG AUTOMASJON AS | registry: bankrupt (konkurs) | available | 117 | https://acceptelektro.no/ (name derived domain with exact legal name) | 0 | 0 | 2022, 2023, 2024 | 3 |
 | 910958178 | AS BØE & LEPSØY | registry: bankrupt (konkurs) | available | 119 | not_available | 0 | 0 | 2022, 2023, 2024 | 3 |
 | 915514219 | ABELI ENERGI AS | registry: under liquidation | available | 112 | not_available | 0 | 0 | 2023, 2024, 2025 | 3 |
 | 929359674 | AKSUPPS AS | registry: under liquidation | available | 91 | not_available | 0 | 0 | 2023, 2024, 2025 | 4 |

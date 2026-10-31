@@ -81,26 +81,65 @@ How identities are proven: [docs/IDENTITY_RESOLUTION.md](docs/IDENTITY_RESOLUTIO
 
 ## 100-company smoke test
 
-Run from a clean clone at commit `184c4a1` in a fresh `python:3.12-slim` container (6 CPUs, 6 GB, unprivileged user), only `pip install -r requirements.txt` before the run command:
+Run from a clean clone at commit `c431d48` in a fresh `python:3.12-slim` container (6 CPUs, 6 GB, unprivileged user), only `pip install -r requirements.txt` before the run command:
 
 | Result | Value |
 |---|---|
 | Envelopes | 100 / 100, all terminal, validation passed |
-| Claims | 12,084 (121 per company), every one with source URL, retrieval time, SHA-256, locator and excerpt |
+| Claims | 12,107 (121 per company), every one with source URL, retrieval time, SHA-256, locator and excerpt |
 | Companies with accounts / roles / workplaces / registry activity | 96 / 96 / 90 / 97 |
-| Verified official website | 28 (12 by organisation number on the site) |
-| Company-owned profiles / contact details / LEI | 15 / 68 / 13 |
-| Single job ads / dated website news | 2 / 5 |
+| Verified official website | 31 (14 by organisation number on the site) |
+| Company-owned profiles / contact details / LEI | 16 / 69 / 13 |
+| Single job ads / dated website news | 2 / 6 |
 | Items found but withheld by a publication rule | 126 (`reports/smoke-withheld.jsonl`) |
-| Wall-clock runtime | 109 s (p50 6.4 s, p95 24.9 s per company) |
-| Requests | 1,448 |
+| Wall-clock runtime | 110 s (p50 3.5 s, p95 20.3 s per company) |
+| Requests | 1,483 |
 | Third-party cost / model calls | USD 0 / 0 |
-| Refresh re-run on a copy of the output | 0 change records (idempotent), 102 s |
-| Test suite in the same kind of clean container | 68 passed |
+| Refresh re-run on a copy of the output | 0 change records (idempotent), 98 s |
+| Test suite in the same kind of clean container | 78 passed |
 
-Full report with the per-company table: [reports/SMOKE_TEST.md](reports/SMOKE_TEST.md); machine-readable reports: `reports/smoke-run-report.json`, `reports/smoke-refresh-run-report.json`; the envelopes themselves: `reports/smoke-envelopes.jsonl.gz`. The batch (`reports/smoke-100-companies.jsonl`) mixes size bands and legal forms from the public universe with bankrupt, liquidating, deleted and sole-proprietorship entities from the live register.
+Full report with the per-company table: [reports/SMOKE_TEST.md](reports/SMOKE_TEST.md); machine-readable reports: `reports/smoke-run-report.json`, `reports/smoke-refresh-run-report.json`; the envelopes themselves: `reports/smoke-envelopes.jsonl.gz`.
 
-A 1,000-company random sample from the public universe (`reports/sample-1000-companies.jsonl`) completed in 504 s with 1,000/1,000 envelopes and 105,643 claims from the same clean clone; report: `reports/sample-1000-run-report.json`.
+A 1,000-company random sample from the public universe (`reports/sample-1000-companies.jsonl`) completed in 348 s with 1,000/1,000 envelopes and 104,856 claims from the same clean clone; report: `reports/sample-1000-run-report.json`.
+
+### The static site
+
+`site/index.html` in every output directory opens from the file system on desktop and mobile, with no server or network. The run summary and `run-report.json` (`site.index`) give its path. Screenshots from the smoke run above:
+
+| Desktop | Mobile |
+|---|---|
+| ![Company profile](docs/screenshots/desktop-profile.png) | ![Evidence panel](docs/screenshots/mobile-verify.png) |
+
+More: [list](docs/screenshots/desktop-list.png), [evidence panel](docs/screenshots/desktop-verify.png), [side-by-side compare](docs/screenshots/desktop-compare.png), [mobile list](docs/screenshots/mobile-list.png), [mobile profile](docs/screenshots/mobile-profile.png).
+
+### Revision 3 (1.3.0) against revision 2 (1.2.0, `f4a3374`)
+
+Revision 3 finds more companies' own websites without loosening the proof that a site belongs to the company, and makes the synthesis state its sources:
+
+- **Exact legal name.** A domain derived from the company's name (for example gausdalelektro.no for GAUSDAL ELEKTRO AS) now counts as its website when the site shows the full registered name with its legal form as words: "Gausdal Elektro AS", "Velkommen til Invensys AS", "Copyright © 2026 - TeppeRent AS". Only legal forms whose names are unique in the register count (AS, ASA, SA, ANS, DA, KS, BA); the legal form must be written in capitals; a name that only appears inside an email address or a domain never counts; and the site must be a .no domain, be marked as Norwegian or show the registered phone or address.
+- **Foundations and associations.** A registry-listed site matches on the name without "Stiftelsen", "Foreningen" or similar (villamollebakken.no for STIFTELSEN VILLA MØLLEBAKKEN, trondheimmontessori.no for STIFTELSEN TRONDHEIM MONTESSORISKOLE).
+- **More name-derived guesses** after the original ten, which are all still tried: merged initials, hyphenated words and a long first word.
+- **Namesakes.** A site that also presents a registered sister company, or another "<first word> … AS" company, is marked shared, so profiles, news and contacts come from it only on pages that prove this company.
+- **Synthesis.** A new "At a glance" paragraph (age, staff, revenue and its change, result and margin, equity share, owner, hiring, website, latest post); every paragraph lists the source URLs it rests on; "What changed" is stated on every run, including the first; every gap carries its reason.
+
+Measured in two ways. Replay: 1.3.0 ran live on 2026-10-31 with every HTTP response recorded, then 1.2.0 ran against the same recordings, so the differences come from the rules alone (1.2.0 asked for a few things 1.3.0 never fetched, 33 pages and 258 DNS lookups on the 1,000 sample, so its side is slightly undercounted). Live: the clean-clone runs above against 1.2.0's clean-clone runs of 2026-10-23, eight days of web changes apart. Companies / facts:
+
+| Field family | Smoke 100, replay | Smoke 100, live | Random 100, replay | Random 100, live | 1,000, replay | 1,000, live |
+|---|---|---|---|---|---|---|
+| Verified website (company's own) | 27 → 31 | 28 → 31 | 9 → 13 | 10 → 13 | 95 → 110 | 106 → 110 |
+| Company-owned profiles | 15 / 32 → 16 / 34 | 15 → 16 | 5 / 7 → 7 / 10 | 6 → 7 | 57 / 111 → 63 / 119 | 62 → 63 |
+| Website news | 6 / 38 → 6 / 38 | 5 → 6 | 1 → 1 | 1 → 1 | 16 / 90 → 19 / 113 | 19 → 19 |
+| Job ads | 2 → 2 | 2 → 2 | 0 → 0 | 0 → 0 | 4 / 8 → 4 / 8 | 4 → 4 |
+| Contact details read from the website | 22 / 54 → 24 / 57 | | 8 / 13 → 11 / 19 | | 79 / 173 → 86 / 180 | |
+| Public brand | 25 → 29 | 26 → 29 | 8 → 12 | 9 → 12 | 89 → 101 | 101 → 101 |
+| Claims, all families | 11,858 → 12,150 | 12,084 → 12,107 | 10,590 → 10,833 | 10,826 → 10,839 | 103,561 → 104,698 | 105,643 → 104,856 |
+| Wall-clock runtime | | 109 s → 110 s | | 123 s → 117 s | | 504 s → 348 s |
+
+On the live 1,000 sample the two new methods verified 17 websites (15 by exact legal name, 2 foundations); against 1.2.0's live run that is 9 more companies with a website and 5 fewer. The five are live changes, not the new rules (1.2.0 replayed on the same day loses them too): three sites answered HTTP 429, one registry-listed domain is now a parked page, and one site no longer shows the company's name without JavaScript. On the 100 companies Builderr published as its own sample, our websites now agree with 72 of its 84 (67 with 1.2.0). Hiring is unchanged and at its ceiling: of the 10,120 active NAV ads, every ad whose employer number belongs to a sample company is published; the one exception is an anonymous-employer ad, which stays anonymous.
+
+Every website verified by a new method in these runs (3 smoke, 3 random, 17 on the 1,000) was checked by hand against the cached page: each shows the company's exact registered legal name and none belongs to another company. treco.no for TRECO HOLDING AS is labelled a group site, not the company's own. A looser intermediate rule had matched proconsult.as, the Danish ProConsult A/S, through an email address alone; the final rule ignores names inside email addresses and domains, and a test covers that case. The weakest remaining proof is a site that shows only the name and legal form (flinkbygg.no for FLINK BYGG AS); it holds because the register does not allow two AS companies with the same name.
+
+Checked and not used: OpenStreetMap websites (new candidate domains for 7 of the 1,000 companies, mostly chain or Facebook pages), Google News RSS and DuckDuckGo (disallowed by their robots.txt), proff.no and gulesider.no (block automated access) and the DiBK central approval register API (disallowed by its robots.txt).
 
 ### Revision 2 (1.2.0) against revision 1 (1.1.0, `1bfd04a`)
 
