@@ -1,0 +1,547 @@
+{
+  "report_version": "signalpost-anchor-run-report/1.0",
+  "agent": {
+    "name": "Signalpost Anchor",
+    "version": "1.4.0"
+  },
+  "run": {
+    "run_id": "run-20261101T211218",
+    "started_at": "2026-11-01T21:12:18.578Z",
+    "completed_at": "2026-11-01T21:18:12.569Z",
+    "terminal_status": "completed",
+    "agent": "Signalpost Anchor",
+    "agent_version": "1.4.0",
+    "evidence_cutoff": "2026-11-01T21:18:12.569Z"
+  },
+  "environment": {
+    "python": "3.12.15",
+    "platform": "Linux-7.0.0-31-generic-x86_64-with-glibc2.41",
+    "cpu_count": 24
+  },
+  "options": {
+    "time_budget_s": 1800.0,
+    "company_budget_s": 75.0,
+    "concurrency": 24,
+    "web": true,
+    "guess_domains": true,
+    "jobs": true,
+    "external": true,
+    "nav_lookback_days": 180,
+    "filing_years": true,
+    "previous_envelopes": "/runs/b1000-since-r2/previous-1.2.0-envelopes.jsonl"
+  },
+  "input": {
+    "records": 1000,
+    "unique": 1000,
+    "duplicates_ignored": [],
+    "invalid_organisation_numbers": []
+  },
+  "validation": {
+    "expected_envelopes": 1000,
+    "emitted_envelopes": 1000,
+    "exact_expected_count": true,
+    "unique_organisation_numbers": true,
+    "all_terminal": true,
+    "all_sections_have_valid_state": true,
+    "all_claims_have_evidence": true,
+    "all_evidence_has_source_time_hash": true,
+    "passed": true
+  },
+  "envelope_states": {
+    "available": 1000
+  },
+  "section_states": {
+    "legal_identity": {
+      "available": 1000
+    },
+    "annual_accounts": {
+      "available": 999,
+      "failed": 1
+    },
+    "leadership": {
+      "available": 999,
+      "not_available": 1
+    },
+    "workplaces": {
+      "available": 999,
+      "not_available": 1
+    },
+    "website": {
+      "not_available": 823,
+      "available": 111,
+      "ambiguous": 54,
+      "blocked": 9,
+      "failed": 3
+    },
+    "company_profiles": {
+      "not_available": 937,
+      "available": 63
+    },
+    "hiring": {
+      "not_available": 996,
+      "available": 4
+    },
+    "public_activity": {
+      "available": 1000
+    },
+    "contact": {
+      "available": 486,
+      "not_available": 514
+    },
+    "external_identifiers": {
+      "available": 1000
+    }
+  },
+  "coverage_companies": {
+    "official_identity": 1000,
+    "annual_accounts": 1000,
+    "leadership": 999,
+    "registered_workplaces": 765,
+    "verified_website": 111,
+    "company_profiles": 63,
+    "hiring_any": 4,
+    "job_postings": 4,
+    "website_news": 18,
+    "registry_activity": 999,
+    "contact": 486,
+    "lei": 127,
+    "wikidata": 12,
+    "public_brand": 102
+  },
+  "coverage_share": {
+    "official_identity": 1.0,
+    "annual_accounts": 1.0,
+    "leadership": 0.999,
+    "registered_workplaces": 0.765,
+    "verified_website": 0.111,
+    "company_profiles": 0.063,
+    "hiring_any": 0.004,
+    "job_postings": 0.004,
+    "website_news": 0.018,
+    "registry_activity": 0.999,
+    "contact": 0.486,
+    "lei": 0.127,
+    "wikidata": 0.012,
+    "public_brand": 0.102
+  },
+  "claims": {
+    "total": 104827,
+    "per_company_mean": 104.8,
+    "by_field": {
+      "financials.annual_result": 2790,
+      "financials.total_assets": 2790,
+      "financials.audited": 2790,
+      "financials.accounting_rules": 2790,
+      "financials.statement_format": 2790,
+      "financials.equity": 2783,
+      "financials.total_liabilities": 2760,
+      "financials.parent_company_filer": 2755,
+      "financials.profit_before_tax": 2742,
+      "financials.current_assets": 2728,
+      "financials.operating_result": 2721,
+      "activity.role_group_changed": 2694,
+      "financials.paid_in_equity": 2654,
+      "financials.operating_expenses": 2653,
+      "financials.retained_earnings": 2628,
+      "financials.cash_and_bank": 2617,
+      "financials.current_liabilities": 2511,
+      "financials.net_financial_items": 2338,
+      "financials.revenue": 2149,
+      "financials.fixed_assets": 2090,
+      "financials.receivables": 2033,
+      "financials.financial_income": 1953,
+      "financials.financial_expenses": 1864,
+      "financials.sales_revenue": 1443,
+      "financials.total_comprehensive_result": 1440,
+      "financials.filed_copy": 1419,
+      "financials.tax_expense": 1401,
+      "financials.wage_costs": 1290,
+      "location.registered_workplace": 1204,
+      "financials.long_term_liabilities": 1201,
+      "activity.registry_accounts_filed": 1012,
+      "identity.industry": 1005,
+      "identity.organisation_number": 1000,
+      "identity.legal_name": 1000,
+      "identity.legal_form": 1000,
+      "identity.status": 1000,
+      "identifier.brreg_public_page": 1000,
+      "identity.registered_date": 999,
+      "identity.vat_registered": 999,
+      "identity.in_business_register": 999,
+      "identity.in_foundation_register": 999,
+      "identity.in_voluntary_register": 999,
+      "identity.in_party_register": 999,
+      "identity.part_of_group": 999,
+      "identity.registered_activity": 999,
+      "identity.language_form": 999,
+      "financials.latest_submitted_year": 999,
+      "location.business_address": 997,
+      "location.municipality": 993,
+      "identity.founded_date": 989,
+      "leadership.board_chair": 983,
+      "identity.institutional_sector": 972,
+      "identity.business_register_date": 970,
+      "identity.articles_date": 968,
+      "identity.statutory_purpose": 964,
+      "identity.share_capital": 929,
+      "leadership.board_member": 914,
+      "identity.number_of_shares": 899,
+      "activity.registry_employee_count": 710,
+      "leadership.accountant": 667,
+      "leadership.ceo": 625,
+      "identity.vat_registered_date": 505,
+      "identity.vat_registered_in_register_date": 505,
+      "financials.inventory": 473,
+      "activity.registry_event": 412,
+      "financials.investments": 345,
+      "leadership.auditor": 340,
+      "leadership.board_deputy_member": 270,
+      "identity.former_name": 268,
+      "contact.registry_email": 224,
+      "contact.postal_address": 210,
+      "contact.registry_mobile": 181,
+      "contact.registry_phone": 174,
+      "financials.filed_copy_years": 160,
+      "identity.employees": 132,
+      "identifier.lei": 127,
+      "identifier.lei_status": 127,
+      "location.lei_legal_address": 127,
+      "location.lei_headquarters_address": 127,
+      "identifier.lei_registered_date": 127,
+      "website.official_url": 111,
+      "website.title": 109,
+      "activity.registry_address_change": 107,
+      "website.registry_listed": 106,
+      "activity.website_news": 105,
+      "website.language": 103,
+      "activity.registry_industry_change": 102,
+      "identity.public_brand": 102,
+      "activity.registry_articles_updated": 100,
+      "identity.voluntary_vat_registered_date": 99,
+      "identity.voluntary_vat_basis": 99,
+      "contact.website_phone": 94,
+      "contact.website_email": 81,
+      "website.description": 70,
+      "identity.auxiliary_unit_code": 69,
+      "activity.registry_vat_status_change": 62,
+      "location.website_address": 61,
+      "leadership.business_manager": 60,
+      "leadership.named_on_website": 57,
+      "group.subsidiary": 53,
+      "group.size": 52,
+      "profile.facebook": 48,
+      "financials.goodwill": 47,
+      "activity.registry_postal_address_change": 44,
+      "activity.registry_capital_change": 42,
+      "profile.instagram": 37,
+      "group.ultimate_parent": 36,
+      "group.parent": 36,
+      "activity.registry_name_change": 30,
+      "website.about_description": 29,
+      "website.logo": 29,
+      "profile.linkedin": 22,
+      "leadership.partner": 22,
+      "activity.registry_email_change": 14,
+      "activity.registry_liquidation": 13,
+      "identity.website_founded_year": 12,
+      "identifier.wikidata": 12,
+      "identity.liquidation_date": 11,
+      "identity.inception_wikidata": 10,
+      "identity.voluntary_register_date": 9,
+      "hiring.job_posting": 8,
+      "leadership.parent_foreign_entity": 7,
+      "identifier.wikipedia_article": 7,
+      "activity.registry_phone_change": 6,
+      "activity.registry_website_change": 6,
+      "profile.youtube": 5,
+      "profile.tiktok": 5,
+      "website.group_brand_site": 5,
+      "identity.website_founding_date": 4,
+      "hiring.active_job_ads_nav": 4,
+      "location.opening_hours": 3,
+      "identity.employer_self_description": 3,
+      "identity.bankruptcy_date": 2,
+      "activity.registry_bankruptcy": 2,
+      "website.offering": 2,
+      "profile.x": 2,
+      "leadership.owner": 2,
+      "leadership.contact_person": 2,
+      "activity.registry_forced_dissolution": 2,
+      "identity.deleted_date": 1,
+      "leadership.norwegian_representative": 1,
+      "identity.website_employees": 1
+    }
+  },
+  "website_verification_methods": {
+    "organisation_number_on_site": 45,
+    "previously_verified_and_name_or_contact_match": 37,
+    "name_derived_domain_with_exact_legal_name": 9,
+    "registry_listed_and_name_match": 20,
+    "registry_listed_and_name_without_organisation_type_match": 2,
+    "registry_listed_and_address_match": 1,
+    "name_derived_domain_with_name_and_contact_match": 1
+  },
+  "changes": {
+    "total": 144,
+    "by_type": {
+      "removed_location": 1,
+      "expired_activity": 14,
+      "new_value": 3,
+      "new_activity": 12,
+      "new_role": 17,
+      "removed_role": 22,
+      "changed_value": 10,
+      "new_profile": 1,
+      "changed_location": 1,
+      "restated_value": 1,
+      "new_filing": 24,
+      "removed_filing_value": 25,
+      "changed_description": 1,
+      "removed_value": 8,
+      "removed_profile": 2,
+      "new_job": 1,
+      "closed_job": 1
+    },
+    "companies_with_previous": 1000
+  },
+  "whats_new": {
+    "companies_compared": 1000,
+    "companies_with_new_items": 11,
+    "since_previous_run_by_kind": {
+      "new_article": 4,
+      "leader_changed": 3,
+      "new_social": 1,
+      "address_moved": 1,
+      "name_changed": 1,
+      "new_accounts_year": 1,
+      "article_found": 1,
+      "status_changed": 1,
+      "new_job": 1,
+      "job_closed": 1
+    },
+    "removals_caused_by_a_newer_publication_rule": 11,
+    "latest_movements_by_kind": {
+      "revenue_move": 601,
+      "result_turned": 241,
+      "recent_registry_event": 198,
+      "recent_article": 16,
+      "recent_job": 6
+    },
+    "items": [
+      {
+        "organisation_number": "916555636",
+        "name": "TUNVEIEN REKKEHUS AS",
+        "kind": "address_moved",
+        "headline": "Registered business address moved: Skabos vei 4, 0278 OSLO → Henrik Ibsens gate 48, 0255 OSLO",
+        "why": "A move can mean growth, cost cutting or a merger.",
+        "materiality": "material"
+      },
+      {
+        "organisation_number": "923542949",
+        "name": "ARKITEKT INVEST AS",
+        "kind": "name_changed",
+        "headline": "Registered name changed: SELBERG ARKITEKTUR AS → ARKITEKT INVEST AS",
+        "why": "A new name usually follows a rebrand, merger or new owner.",
+        "materiality": "material"
+      },
+      {
+        "organisation_number": "935265134",
+        "name": "E-BIL AS",
+        "kind": "leader_changed",
+        "headline": "New CEO: Anders Eivind Christiansen",
+        "why": "A new CEO or chair often comes before a change of strategy.",
+        "materiality": "material"
+      },
+      {
+        "organisation_number": "935265134",
+        "name": "E-BIL AS",
+        "kind": "leader_changed",
+        "headline": "New board chair: Andre Luis Planas",
+        "why": "A new CEO or chair often comes before a change of strategy.",
+        "materiality": "material"
+      },
+      {
+        "organisation_number": "967427047",
+        "name": "ANOCO MANAGEMENT AS",
+        "kind": "status_changed",
+        "headline": "Registry status changed: active → liquidating",
+        "why": "A status change (bankruptcy, liquidation, deletion) decides whether one can still do business with the company.",
+        "materiality": "material"
+      },
+      {
+        "organisation_number": "988936812",
+        "name": "DESIGN PARTNER I NORGE AS",
+        "kind": "new_accounts_year",
+        "headline": "Accounts for 2026 filed: revenue NOK 8.7 m, up 471% on 2025",
+        "why": "A newly filed year is the most reliable size signal: it shows whether the business grew or shrank.",
+        "materiality": "material"
+      },
+      {
+        "organisation_number": "996126110",
+        "name": "LOGISTIKK NORD AS",
+        "kind": "leader_changed",
+        "headline": "New board chair: Pål Morten Ringseth Oxaal",
+        "why": "A new CEO or chair often comes before a change of strategy.",
+        "materiality": "material"
+      },
+      {
+        "organisation_number": "820495462",
+        "name": "POWER BOOTCAMP AS",
+        "kind": "new_job",
+        "headline": "New job ad: “Vi søker sushikokk til vårt team!” (posted 2026-10-26)",
+        "why": "A new job ad signals growth or a replacement need, and the role shows where.",
+        "materiality": "minor"
+      },
+      {
+        "organisation_number": "820495462",
+        "name": "POWER BOOTCAMP AS",
+        "kind": "job_closed",
+        "headline": "Job ad closed: “Vi søker sushikokk til vårt team!”",
+        "why": "The role was filled or withdrawn.",
+        "materiality": "minor"
+      },
+      {
+        "organisation_number": "920290310",
+        "name": "FJELDFOLK AS",
+        "kind": "new_social",
+        "headline": "New Instagram account linked from the verified site: https://www.instagram.com/fjeldfolk",
+        "why": "Another verified channel to follow the company.",
+        "materiality": "minor"
+      },
+      {
+        "organisation_number": "920610331",
+        "name": "BILLITY AS",
+        "kind": "new_article",
+        "headline": "New article on the company website: “Slik starter du en MVNO: En steg-for-steg-guide” (2026-10-29)",
+        "why": "First-party news shows what the company is doing now: contracts, projects, people or products.",
+        "materiality": "minor"
+      },
+      {
+        "organisation_number": "920610331",
+        "name": "BILLITY AS",
+        "kind": "new_article",
+        "headline": "New article on the company website: “Slik får en MVNO tilgang til et mobilnett” (2026-10-28)",
+        "why": "First-party news shows what the company is doing now: contracts, projects, people or products.",
+        "materiality": "minor"
+      },
+      {
+        "organisation_number": "920610331",
+        "name": "BILLITY AS",
+        "kind": "new_article",
+        "headline": "New article on the company website: “Hva koster det å starte en MVNO?” (2026-10-28)",
+        "why": "First-party news shows what the company is doing now: contracts, projects, people or products.",
+        "materiality": "minor"
+      },
+      {
+        "organisation_number": "929413318",
+        "name": "UNIVERSE PROFILE AS",
+        "kind": "new_article",
+        "headline": "New article on the company website: “Ett studio for klær, skilt og emballasje” (2026-10-30)",
+        "why": "First-party news shows what the company is doing now: contracts, projects, people or products.",
+        "materiality": "minor"
+      },
+      {
+        "organisation_number": "963333641",
+        "name": "MC HUSET NYDAL AS",
+        "kind": "article_found",
+        "headline": "Article found for the first time, published 2026-05-28: “Nyhet! BMW F 450 GS”",
+        "why": "Published before the previous run but found only now (the site changed or now reads it); context, not news since the last run.",
+        "materiality": "minor"
+      }
+    ]
+  },
+  "jobs_feed": {
+    "enabled": true,
+    "state": "complete",
+    "token_source": "NAV published public token (api/publicToken)",
+    "pages_read": 353,
+    "segments": 16,
+    "lookback_days": 180,
+    "newest_change_seen": "2026-11-01T21:49:10.262655+01:00",
+    "ads_indexed": 86450,
+    "active_ads_indexed": 9337,
+    "error": null,
+    "candidates": 358,
+    "verified": 8,
+    "rejected_orgnr_mismatch": 350,
+    "inactive": 0,
+    "errors": 0,
+    "second_pass_companies": 2,
+    "second_pass_verified": 0
+  },
+  "external_lookups": {
+    "wikidata_matches": 12,
+    "gleif_matches": 127,
+    "errors": []
+  },
+  "operations": {
+    "requests": 11059,
+    "bytes_received": 477131481,
+    "request_p50_ms": 177,
+    "request_p95_ms": 1156,
+    "top_hosts": {
+      "data.brreg.no": 5216,
+      "pam-stilling-feed.nav.no": 712,
+      "www.webhuset.no": 33,
+      "www.ilico.no": 20,
+      "frammuseum.no": 17,
+      "navn.no": 16,
+      "www.hugedomains.com": 16,
+      "www.masoval.no": 15,
+      "billity.no": 15,
+      "www.kriss.com": 15,
+      "www.gymtech.no": 15,
+      "farsundfjordhotell.no": 15
+    },
+    "transport_errors": {
+      "ConnectError": 479,
+      "ConnectTimeout": 223,
+      "ReadTimeout": 4,
+      "RemoteProtocolError": 2
+    },
+    "runtime_s": 356.4,
+    "company_runtime_p50_ms": 3916.5996848605573,
+    "company_runtime_p95_ms": 22703.43023398891,
+    "third_party_cost_usd": 0.0,
+    "llm_calls": 0,
+    "paid_apis": []
+  },
+  "filing_copy_years": {
+    "companies_checked": 160,
+    "skipped_no_accounts": 0,
+    "rate_limited": 0,
+    "stopped_at_time_budget": true,
+    "pending": 840
+  },
+  "withheld": {
+    "total": 607,
+    "companies": 143,
+    "by_rule": {
+      "job_employer_not_company": 350,
+      "job_careers_landing_page": 59,
+      "news_bulk_identical_dates": 39,
+      "social_opaque_handle_unverifiable": 31,
+      "news_not_a_post_url": 30,
+      "social_handle_does_not_match_company": 25,
+      "news_product_or_catalogue_page": 10,
+      "social_from_group_page_without_proof": 10,
+      "news_no_publish_date": 7,
+      "news_placeholder_post": 6,
+      "news_careers_or_membership_page": 6,
+      "social_parent_or_group_account": 6,
+      "news_testimonial_or_reference_page": 5,
+      "news_menu_or_listing_title": 5,
+      "news_over_check_limit": 5,
+      "news_not_enough_text": 4,
+      "social_site_builder_or_theme": 4,
+      "news_duplicate_title": 3,
+      "news_sale_or_campaign_page": 1,
+      "brand_from_shared_site": 1
+    }
+  },
+  "site": {
+    "index": "site/index.html",
+    "companies": 1000,
+    "how_to_open": "open site/index.html in any browser, from the file system, on desktop or mobile; no server or network needed"
+  }
+}

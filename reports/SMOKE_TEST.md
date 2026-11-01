@@ -1,14 +1,14 @@
 # 100-company smoke test
 
-Run `run-20261031T170546`, agent Signalpost Anchor 1.3.0, completed 2026-10-31T17:07:36.667Z.
+Run `run-20261101T205558`, agent Signalpost Anchor 1.4.0, completed 2026-11-01T20:57:37.046Z.
 
 Command (clean `python:3.12-slim` container, empty virtual environment, only the declared install step):
 
 ```bash
-git clone https://github.com/CVasilopoulos/signalpost-anchor && cd signalpost-anchor && git checkout c431d48 && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/python -m signalpost_anchor run --input reports/smoke-100-companies.jsonl --output /runs/smoke
+git clone https://github.com/CVasilopoulos/signalpost-anchor && cd signalpost-anchor && git checkout e89dca9 && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt && .venv/bin/python -m signalpost_anchor run --input reports/smoke-100-companies.jsonl --output /runs/smoke
 ```
 
-Machine: Linux x86-64 server; the repository was cloned on the host at the commit above, mounted read-only and copied into a fresh Docker python:3.12-slim container limited to 6 CPUs and 6 GB RAM, running as an unprivileged user; the test suite (78 tests) passed in the same kind of container before the run. Batch: `reports/smoke-100-companies.jsonl` (selection script `tools/select_smoke_batch.py`, seed 20261016).. Batch: `reports/smoke-100-companies.jsonl` (selection script `tools/select_smoke_batch.py`, seed 20261016).
+Machine: Linux x86-64 server shared with other jobs; the repository was cloned on the host at the commit above, mounted read-only and copied into a fresh Docker python:3.12-slim container limited to 2 CPUs and 2 GB RAM, running as an unprivileged user; the test suite (104 passed) passed in the same kind of container before the run. Batch: `reports/smoke-100-companies.jsonl` (selection script `tools/select_smoke_batch.py`, seed 20261016).
 
 ## Contract checks
 
@@ -36,7 +36,7 @@ Machine: Linux x86-64 server; the repository was cloned on the host at the commi
 | Hiring (single job ads) | 2 (2%) |
 | Active job postings | 2 (2%) |
 | Dated registry activity | 97 (97%) |
-| Dated website news | 6 (6%) |
+| Dated website news | 5 (5%) |
 | Contact details | 69 (69%) |
 | LEI | 13 (13%) |
 | Wikidata item | 5 (5%) |
@@ -60,34 +60,40 @@ Machine: Linux x86-64 server; the repository was cloned on the host at the commi
 
 | Metric | Value |
 |---|---|
-| Claims published | 12107 (mean 121.1 per company) |
+| Claims published | 12030 (mean 120.3 per company) |
 | Website verification methods | registry_email_domain_and_name_match: 5, registry_listed_and_name_match: 5, subunit_registry_listed_and_name_match: 1, name_derived_domain_with_exact_legal_name: 3, organisation_number_on_site: 14, name_derived_domain_with_name_and_contact_match: 3 |
-| HTTP requests | 1483 (202.4 MB after decompression; the NAV feed is served gzip-compressed) |
-| Wall-clock runtime | 110.5 s |
-| Per-company research time p50 / p95 | 3.5 s / 20.3 s |
-| NAV feed | 356 pages, 10120 active ads indexed, 2 ads verified by employer number |
-| Filed-copy lookups | 52 companies |
+| HTTP requests | 1492 (222.9 MB after decompression; the NAV feed is served gzip-compressed) |
+| Wall-clock runtime | 98.3 s |
+| Per-company research time p50 / p95 | 3.7 s / 23.0 s |
+| NAV feed | 353 pages, 9337 active ads indexed, 2 ads verified by employer number |
+| Filed-copy lookups | 46 companies |
 | Third-party cost | USD 0.00 |
 | Language-model calls | 0 |
 
 ## Withheld items
 
-Items found but not published (126 across 26 companies; each listed in `withheld.jsonl` with the page URL and the content hash of the cached page):
+Items found but not published (134 across 25 companies; each listed in `withheld.jsonl` with the page URL and the content hash of the cached page):
 
 | Rule | Items |
 |---|---|
-| job_employer_not_company | 61 |
+| job_employer_not_company | 54 |
 | social_handle_does_not_match_company | 20 |
 | job_careers_landing_page | 13 |
 | job_recruitment_portal_link | 12 |
+| news_product_or_catalogue_page | 10 |
 | news_not_a_post_url | 8 |
 | social_opaque_handle_unverifiable | 6 |
+| news_over_check_limit | 5 |
 | news_no_publish_date | 4 |
 | news_careers_or_membership_page | 2 |
 
 ## Refresh re-run
 
-The same command was run again on the same output directory (`run-20261031T170745`): 0 change records across 100 companies with a previous envelope (none), runtime 97.9 s.
+The same command was run again on the same output directory (`run-20261101T205745`): 0 change records across 100 companies with a previous envelope (none), runtime 98.3 s.
+
+## What changed since the previous run
+
+Against the 1.3.0 clean-clone run of 31 October (a day earlier, over a weekend). Run `run-20261101T205935` against its previous envelopes: 0 of 100 compared companies have something new (nothing). Items the previous run published that a stricter publication rule now withholds: 1; they are listed separately and not counted as changes at the source. Latest movements in that run's own evidence: 77 revenue move, 39 recent registry event, 24 result turned, 5 recent article, 1 recent job.
 
 ## Per company
 
@@ -139,12 +145,12 @@ The same command was run again on the same output directory (`run-20261031T17074
 | 924656565 | LINE GARD AS | universe size band none | available | 120 | not_available | 0 | 0 | 2023, 2024, 2025 | 4 |
 | 998719305 | GUTE AS | universe size band none | available | 129 | not_available | 0 | 0 | — | 3 |
 | 833296922 | JG PLASTSVEIS AS | universe size band 5-19 | available | 111 | https://jgplastsveis.no/ (organisation number on site) | 0 | 0 | 2024, 2025 | 2 |
-| 979949707 | RAVN WEBVEVERIET AS | universe size band 5-19 | available | 149 | https://www.ravn.no/ (organisation number on site) | 0 | 0 | 2023, 2024, 2025 | 2 |
-| 924317140 | LANGVED BLIKKENSLAGERVERKSTED AS | universe size band 5-19 | available | 140 | not_available | 0 | 0 | 2023, 2024, 2025 | 4 |
-| 990463360 | IDEHYTTA AS | universe size band 5-19 | available | 154 | https://idehytta.no/ (registry email domain and name match) | 2 | 0 | 2023, 2024, 2025 | 1 |
-| 984662335 | MOGLEG AS | universe size band 5-19 | available | 158 | https://www.mogleg.no/ (name derived domain with name and contact match) | 2 | 0 | 2023, 2024, 2025 | 1 |
-| 930873802 | LÆRINGSVERKSTEDET MATTISGÅRDEN NATURBARNEHAGE AS | universe size band 5-19 | available | 109 | not_available | 0 | 0 | 2023, 2024 | 3 |
-| 918374493 | ELVERUM BILTRANSPORT AS | universe size band 5-19 | available | 142 | not_available | 0 | 0 | 2023, 2024, 2025 | 3 |
+| 979949707 | RAVN WEBVEVERIET AS | universe size band 5-19 | available | 133 | https://www.ravn.no/ (organisation number on site) | 0 | 0 | 2023, 2024, 2025 | 2 |
+| 924317140 | LANGVED BLIKKENSLAGERVERKSTED AS | universe size band 5-19 | available | 132 | not_available | 0 | 0 | 2023, 2024, 2025 | 4 |
+| 990463360 | IDEHYTTA AS | universe size band 5-19 | available | 137 | https://idehytta.no/ (registry email domain and name match) | 2 | 0 | 2023, 2024, 2025 | 1 |
+| 984662335 | MOGLEG AS | universe size band 5-19 | available | 142 | https://www.mogleg.no/ (name derived domain with name and contact match) | 2 | 0 | 2023, 2024, 2025 | 1 |
+| 930873802 | LÆRINGSVERKSTEDET MATTISGÅRDEN NATURBARNEHAGE AS | universe size band 5-19 | available | 105 | not_available | 0 | 0 | 2023, 2024 | 3 |
+| 918374493 | ELVERUM BILTRANSPORT AS | universe size band 5-19 | available | 126 | not_available | 0 | 0 | 2023, 2024, 2025 | 3 |
 | 917568863 | MYRSLETT AUTO AS | universe size band 5-19 | available | 136 | https://myrslettauto.com/ (organisation number on site) | 1 | 0 | 2023, 2024, 2025 | 1 |
 | 926403966 | FLEXID BYGG AS | universe size band 5-19 | available | 115 | https://www.flexidbygg.no/ (organisation number on site) | 0 | 0 | 2023, 2024, 2025 | 3 |
 | 986243348 | FRUENE AS | universe size band 5-19 | available | 138 | https://fruene.no/ (name derived domain with exact legal name) | 2 | 0 | 2023, 2024, 2025 | 1 |

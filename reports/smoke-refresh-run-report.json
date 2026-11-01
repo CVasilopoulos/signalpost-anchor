@@ -2,16 +2,16 @@
   "report_version": "signalpost-anchor-run-report/1.0",
   "agent": {
     "name": "Signalpost Anchor",
-    "version": "1.3.0"
+    "version": "1.4.0"
   },
   "run": {
-    "run_id": "run-20261031T170745",
-    "started_at": "2026-10-31T17:07:45.714Z",
-    "completed_at": "2026-10-31T17:09:23.495Z",
+    "run_id": "run-20261101T205745",
+    "started_at": "2026-11-01T20:57:45.939Z",
+    "completed_at": "2026-11-01T20:59:24.077Z",
     "terminal_status": "completed",
     "agent": "Signalpost Anchor",
-    "agent_version": "1.3.0",
-    "evidence_cutoff": "2026-10-31T17:09:23.495Z"
+    "agent_version": "1.4.0",
+    "evidence_cutoff": "2026-11-01T20:59:24.077Z"
   },
   "environment": {
     "python": "3.12.15",
@@ -100,7 +100,7 @@
     "company_profiles": 16,
     "hiring_any": 2,
     "job_postings": 2,
-    "website_news": 6,
+    "website_news": 5,
     "registry_activity": 97,
     "contact": 69,
     "lei": 13,
@@ -116,7 +116,7 @@
     "company_profiles": 0.16,
     "hiring_any": 0.02,
     "job_postings": 0.02,
-    "website_news": 0.06,
+    "website_news": 0.05,
     "registry_activity": 0.97,
     "contact": 0.69,
     "lei": 0.13,
@@ -124,7 +124,7 @@
     "public_brand": 0.29
   },
   "claims": {
-    "total": 12031,
+    "total": 12030,
     "per_company_mean": 120.3,
     "by_field": {
       "financials.filed_copy": 472,
@@ -198,7 +198,7 @@
       "financials.filed_copy_years": 46,
       "identity.employees": 41,
       "contact.registry_email": 39,
-      "activity.website_news": 38,
+      "activity.website_news": 37,
       "activity.registry_event": 35,
       "contact.registry_phone": 34,
       "contact.website_email": 34,
@@ -277,20 +277,34 @@
     "by_type": {},
     "companies_with_previous": 100
   },
+  "whats_new": {
+    "companies_compared": 100,
+    "companies_with_new_items": 0,
+    "since_previous_run_by_kind": {},
+    "removals_caused_by_a_newer_publication_rule": 0,
+    "latest_movements_by_kind": {
+      "revenue_move": 77,
+      "recent_registry_event": 39,
+      "result_turned": 24,
+      "recent_article": 5,
+      "recent_job": 1
+    },
+    "items": []
+  },
   "jobs_feed": {
     "enabled": true,
     "state": "complete",
     "token_source": "NAV published public token (api/publicToken)",
-    "pages_read": 356,
+    "pages_read": 353,
     "segments": 16,
     "lookback_days": 180,
-    "newest_change_seen": "2026-10-31T16:29:32.627837+01:00",
-    "ads_indexed": 86965,
-    "active_ads_indexed": 10120,
+    "newest_change_seen": "2026-11-01T21:49:10.262655+01:00",
+    "ads_indexed": 86450,
+    "active_ads_indexed": 9337,
     "error": null,
-    "candidates": 63,
+    "candidates": 56,
     "verified": 2,
-    "rejected_orgnr_mismatch": 61,
+    "rejected_orgnr_mismatch": 54,
     "inactive": 0,
     "errors": 0,
     "second_pass_companies": 1,
@@ -302,32 +316,32 @@
     "errors": []
   },
   "operations": {
-    "requests": 1436,
-    "bytes_received": 202379894,
-    "request_p50_ms": 237,
-    "request_p95_ms": 1017,
+    "requests": 1449,
+    "bytes_received": 222926763,
+    "request_p50_ms": 361,
+    "request_p95_ms": 1221,
     "top_hosts": {
       "data.brreg.no": 552,
-      "pam-stilling-feed.nav.no": 420,
+      "pam-stilling-feed.nav.no": 410,
+      "www.mogleg.no": 19,
+      "www.bulbitech.com": 19,
       "bcc.media": 12,
       "www.nho.no": 12,
+      "vselement.no": 11,
       "www.vk.no": 11,
       "www.dekkservice.no": 10,
       "snorreseafood.no": 10,
-      "vselement.no": 9,
-      "www.technoalpin.com": 8,
-      "idehytta.no": 8,
-      "www.sognfg.no": 7,
-      "www.walleniuswilhelmsen.com": 7
+      "assent.no": 9,
+      "www.technoalpin.com": 8
     },
     "transport_errors": {
-      "ConnectError": 34,
-      "ConnectTimeout": 10,
+      "ConnectError": 30,
+      "ConnectTimeout": 12,
       "ReadTimeout": 2
     },
-    "runtime_s": 97.9,
-    "company_runtime_p50_ms": 2522.64366671443,
-    "company_runtime_p95_ms": 19103.429303038865,
+    "runtime_s": 98.3,
+    "company_runtime_p50_ms": 3066.526517737657,
+    "company_runtime_p95_ms": 23033.942520152777,
     "third_party_cost_usd": 0.0,
     "llm_calls": 0,
     "paid_apis": []
@@ -340,15 +354,17 @@
     "pending": 50
   },
   "withheld": {
-    "total": 126,
-    "companies": 26,
+    "total": 134,
+    "companies": 25,
     "by_rule": {
-      "job_employer_not_company": 61,
+      "job_employer_not_company": 54,
       "social_handle_does_not_match_company": 20,
       "job_careers_landing_page": 13,
       "job_recruitment_portal_link": 12,
+      "news_product_or_catalogue_page": 10,
       "news_not_a_post_url": 8,
       "social_opaque_handle_unverifiable": 6,
+      "news_over_check_limit": 5,
       "news_no_publish_date": 4,
       "news_careers_or_membership_page": 2
     }

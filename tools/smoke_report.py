@@ -124,14 +124,14 @@ def main() -> None:
         lines += [
             "## What changed since the previous run",
             "",
-            f"{args.whats_new_label}Run `{later['run']['run_id']}` against its previous envelopes: {block.get('companies_with_new_items', 0)} of {block.get('companies_compared', 0)} compared companies have something new ({kinds}). {block.get('removals_caused_by_a_newer_publication_rule', 0)} items the previous run published are now withheld by a stricter publication rule; they are listed separately and not counted as changes at the source. Latest movements in that run's own evidence: " + (", ".join(f"{count} {kind.replace('_', ' ')}" for kind, count in (block.get("latest_movements_by_kind") or {}).items()) or "none") + ".",
+            f"{args.whats_new_label}Run `{later['run']['run_id']}` against its previous envelopes: {block.get('companies_with_new_items', 0)} of {block.get('companies_compared', 0)} compared companies have something new ({kinds}). Items the previous run published that a stricter publication rule now withholds: {block.get('removals_caused_by_a_newer_publication_rule', 0)}; they are listed separately and not counted as changes at the source. Latest movements in that run's own evidence: " + (", ".join(f"{count} {kind.replace('_', ' ')}" for kind, count in (block.get("latest_movements_by_kind") or {}).items()) or "none") + ".",
             "",
-            "| Org. no. | Company | What is new | Why it matters |",
-            "|---|---|---|---|",
         ]
-        for item in (block.get("items") or [])[:30]:
-            lines.append(f"| {item['organisation_number']} | {(item.get('name') or '').replace('|', '/')} | {item['headline'].replace('|', '/')} | {item['why']} |")
-        lines.append("")
+        items = (block.get("items") or [])[:30]
+        if items:
+            lines += ["| Org. no. | Company | What is new | Why it matters |", "|---|---|---|---|"]
+            lines += [f"| {item['organisation_number']} | {(item.get('name') or '').replace('|', '/')} | {item['headline'].replace('|', '/')} | {item['why']} |" for item in items]
+            lines.append("")
     lines += ["## Per company", "", "| Org. no. | Name | Selection | State | Claims | Website | Profiles | Jobs | Account years | Unknown sections |", "|---|---|---|---|---|---|---|---|---|---|"]
     for envelope in envelopes:
         claims = envelope["claims"]
