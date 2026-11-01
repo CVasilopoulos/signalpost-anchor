@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from typing import Any
+from urllib.parse import urlsplit
 
+from .names import registered_domain
 from .synthesis import money
 
 WHY = {
     "new_article": "First-party news shows what the company is doing now: contracts, projects, people or products.",
+    "article_found": "Published before the previous run but found only now (the site changed or now reads it); context, not news since the last run.",
     "new_accounts_year": "A newly filed year is the most reliable size signal: it shows whether the business grew or shrank.",
     "restated_figure": "A restated figure changes the trend a reader may already rely on.",
     "website_verified": "A verified own site opens the company's own channels: contacts, news and job ads.",
@@ -54,8 +57,13 @@ def _platform(field: str) -> str:
     return PLATFORMS.get(name, name.capitalize())
 
 
+def _host_domain(url: Any) -> str:
+    return registered_domain(urlsplit(str(url or "")).hostname or "")
+
+
 def since_previous_run(envelope: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     claims = [claim for claim in envelope.get("claims") or [] if not claim.get("stale")]
+    previous_day = str((envelope.get("refresh") or {}).get("previous_completed_at") or "")[:10]
     by_id = {claim["id"]: claim for claim in claims}
     revenue = _company_years(claims, "financials.revenue")
     items: list[dict[str, Any]] = []
@@ -70,7 +78,10 @@ def since_previous_run(envelope: dict[str, Any]) -> tuple[list[dict[str, Any]], 
             withdrawn.append({"field": field, "value": change.get("previous_value"), "rule": change["cause"].split(":", 1)[-1], "change_id": change["id"]})
             continue
         if field == "activity.website_news" and kind == "new_activity" and current:
-            items.append(_item("new_article", f"New article on the company website: “{str(current['value'])[:120]}” ({current.get('as_of') or 'undated'})", "public_activity", ids, [change["id"]]))
+            if previous_day and str(current.get("as_of") or "") < previous_day:
+                items.append(_item("article_found", f"Article found for the first time, published {current.get('as_of')}: “{str(current['value'])[:120]}”", "public_activity", ids, [change["id"]]))
+            else:
+                items.append(_item("new_article", f"New article on the company website: “{str(current['value'])[:120]}” ({current.get('as_of') or 'undated'})", "public_activity", ids, [change["id"]]))
         elif field.startswith("financials.") and kind == "new_filing" and current and current.get("fiscal_year") and current.get("account_scope") == "company":
             filings.setdefault(str(current["fiscal_year"]), []).append(change)
         elif field in ("financials.revenue", "financials.annual_result") and kind == "restated_value" and current:
@@ -81,7 +92,7 @@ def since_previous_run(envelope: dict[str, Any]) -> tuple[list[dict[str, Any]], 
                 items.append(_item("website_verified", f"Own website now verified: {change.get('current_value')}", "website", ids, [change["id"]], "material"))
             elif kind == "removed_value":
                 items.append(_item("website_lost", f"Website no longer verified (was {change.get('previous_value')})", "website", [], [change["id"]], "material"))
-            else:
+            elif _host_domain(change.get("previous_value")) != _host_domain(change.get("current_value")):
                 items.append(_item("website_moved", f"Website changed: {change.get('previous_value')} → {change.get('current_value')}", "website", ids, [change["id"]], "material"))
         elif field.startswith("profile.") and kind in ("new_profile", "removed_profile"):
             if kind == "new_profile":
@@ -118,7 +129,7 @@ def since_previous_run(envelope: dict[str, Any]) -> tuple[list[dict[str, Any]], 
                 ids.append(revenue[str(int(year) - 1)]["id"])
         items.append(_item("new_accounts_year", text, "annual_accounts", ids, [change["id"] for change in changes], "material"))
     order = {"material": 0, "minor": 1}
-    items.sort(key=lambda item: order.get(item["materiality"], 2))
+    items.sort(key=lambda item: (order.get(item["materiality"], 2), item["kind"] == "article_found"))
     return items, withdrawn
 
 

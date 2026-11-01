@@ -1,5 +1,7 @@
 import asyncio
 import json
+from datetime import datetime, timezone
+from email.utils import format_datetime
 from pathlib import Path
 
 import httpx
@@ -370,7 +372,7 @@ def test_unknowns_paragraph_gives_the_reason_for_each_gap(tmp_path):
     assert next(p for p in synthesis["paragraphs"] if p["topic"] == "key_points")["text"].startswith("At a glance: registered as bankrupt (konkurs)")
 
 
-NEW_ITEM_RSS = RSS.replace("<channel>", "<channel><item><title>Consto åpner ny avdeling i Alta</title><link>https://consto.no/nyheter/ny-avdeling</link><pubDate>Mon, 26 Oct 2026 08:00:00 +0100</pubDate></item>")
+NEW_ITEM_RSS = RSS.replace("<channel>", "<channel><item><title>Consto åpner ny avdeling i Alta</title><link>https://consto.no/nyheter/ny-avdeling</link><pubDate>" + format_datetime(datetime.now(timezone.utc)) + "</pubDate></item>")
 PRODUCT_RSS = RSS.replace("</pubDate>", "</pubDate><category>Produkter</category>")
 
 

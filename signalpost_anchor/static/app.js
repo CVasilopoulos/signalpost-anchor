@@ -47,7 +47,7 @@
   };
   const SEVERITY_TONE = { high: "bad", medium: "warn", low: "neutral", info: "info" };
   const NEW_KIND_LABEL = {
-    new_article: "New article", new_accounts_year: "New accounts year", restated_figure: "Restated figure", website_verified: "Website verified",
+    new_article: "New article", article_found: "Article found late", new_accounts_year: "New accounts year", restated_figure: "Restated figure", website_verified: "Website verified",
     website_lost: "Website lost", website_moved: "Website moved", new_social: "New social account", social_removed: "Social account removed",
     new_job: "New job ad", job_closed: "Job ad closed", status_changed: "Status changed", name_changed: "Name changed", leader_changed: "New leader",
     auditor_changed: "New auditor", address_moved: "Address moved", headcount_moved: "Headcount moved", revenue_move: "Revenue move",

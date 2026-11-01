@@ -54,3 +54,18 @@ def test_removed_profile_that_a_rule_now_withholds_is_marked_as_a_rule_change():
     block = whatsnew.build(env)
     assert block["since_previous_run"] == []
     assert block["withheld_by_newer_rule"] == [{"field": "profile.linkedin", "value": "https://www.linkedin.com/company/peab", "rule": "social_group_or_foreign_sibling_account", "change_id": "chg-9"}]
+
+
+def test_article_published_before_the_previous_run_is_reported_as_found_late_not_as_new():
+    claims = [claim("n1", "activity.website_news", "Nyhet! BMW F 450 GS", as_of="2026-05-28", url="https://mc-huset.no/aktuelt/bmw-f-450-gs-"), claim("n2", "activity.website_news", "Slik starter du en MVNO", as_of="2026-10-29", url="https://billity.no/slik-starter-du-en-mvno")]
+    changes = [{"id": f"chg-{c['id']}", "type": "new_activity", "field": "activity.website_news", "current_claim_id": c["id"], "previous_value": None, "current_value": c["value"]} for c in claims]
+    env = envelope(claims, changes, first=False)
+    env["refresh"]["previous_completed_at"] = "2026-10-23T09:00:00Z"
+    kinds = {item["claim_ids"][0]: item["kind"] for item in whatsnew.build(env)["since_previous_run"]}
+    assert kinds == {"n1": "article_found", "n2": "new_article"}
+
+
+def test_switch_between_the_bare_domain_and_www_is_not_reported_as_a_website_move():
+    changes = [{"id": "chg-w", "type": "changed_value", "field": "website.official_url", "current_claim_id": "w", "previous_value": "https://fjeldfolk.no/", "current_value": "https://www.fjeldfolk.no/"}]
+    block = whatsnew.build(envelope([claim("w", "website.official_url", "https://www.fjeldfolk.no/")], changes, first=False))
+    assert block["since_previous_run"] == []
