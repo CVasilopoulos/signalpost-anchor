@@ -8,7 +8,7 @@ from typing import Any
 from urllib.parse import unquote, urljoin, urlsplit, urlunsplit
 from xml.etree import ElementTree
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Comment, Declaration, Doctype, ProcessingInstruction
 
 try:
     import lxml  # noqa: F401
@@ -366,10 +366,14 @@ def parse_feed(xml_text: str, base_url: str) -> list[dict[str, Any]]:
         tag = element.tag.split("}")[-1]
         if tag not in ("item", "entry"):
             continue
-        record: dict[str, Any] = {}
+        record: dict[str, Any] = {"categories": []}
         for child in element:
             child_tag = child.tag.split("}")[-1]
-            if child_tag == "title" and child.text:
+            if child_tag == "category":
+                label = (child.text or child.get("term") or child.get("label") or "").strip()
+                if label:
+                    record["categories"].append(label)
+            elif child_tag == "title" and child.text:
                 record["title"] = re.sub(r"\s+", " ", child.text).strip()
             elif child_tag == "link":
                 href = child.get("href") or (child.text or "").strip()
@@ -475,11 +479,107 @@ def page_published_date(soup: BeautifulSoup, objects: list[dict[str, Any]], url:
     return None, None
 
 
+PRODUCT_TYPES = {"Product", "ProductGroup", "ProductModel", "IndividualProduct", "SomeProducts", "Offer", "AggregateOffer", "Car", "Vehicle", "Motorcycle"}
+PRICE_PATTERN = re.compile(r"(?<![\w.,])(?:(?:kr|nok|eur|usd)\.?[ \u00a0]?\d[\d \u00a0.]*\d?(?:,\d{2})?|\d{1,3}(?:[ \u00a0.]\d{3})*(?:,\d{2})?[ \u00a0]?(?:,-|,–|kr\b|nok\b|€)|€[ \u00a0]?\d+)", re.I)
+PLACEHOLDER_TEXT = re.compile(r"lorem ipsum|dolor sit amet", re.I)
+BLOCK_TAGS = {"p", "li", "div", "td", "th", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6", "section", "article", "main", "body", "dd", "dt", "figcaption", "pre", "address", "ul", "ol", "table"}
+NON_CONTENT_TAGS = ["script", "style", "noscript", "template", "svg", "nav", "header", "footer", "aside", "form", "button", "select", "iframe"]
+BANNER = re.compile(r"^(cookie|consent|gdpr|cmplz|onetrust|cky-|borlabs|cookiebot|cc-window|moove_gdpr)|[-_](cookie|consent|gdpr)", re.I)
+WORD = re.compile(r"[^\W\d_]{2,}")
+SENTENCE_END = re.compile(r"[.!?…](\s|$|[\"'»”)])")
+
+
 def is_product_page(soup: BeautifulSoup, objects: list[dict[str, Any]]) -> bool:
     types = {kind for item in objects for kind in types_of(item)}
     if types & {"Product", "ProductGroup"} and not types & ARTICLE_TYPES:
         return True
     return (meta(soup, "og:type") or "").lower() in ("product", "og:product", "product.item")
+
+
+def prose_blocks(root) -> list[tuple[Any, int]]:
+    blocks: dict[int, list[Any]] = {}
+    for string in root.find_all(string=True):
+        if isinstance(string, (Comment, Declaration, Doctype, ProcessingInstruction)):
+            continue
+        text = str(string).strip()
+        if not text:
+            continue
+        node = string.parent
+        linked = False
+        while node is not None and node is not root and node.name not in BLOCK_TAGS:
+            if node.name == "a":
+                linked = True
+            node = node.parent
+        entry = blocks.setdefault(id(node), [node, [], 0, 0])
+        count = len(WORD.findall(text))
+        entry[1].append(text)
+        entry[2] += count
+        if linked:
+            entry[3] += count
+    return [(node, count) for node, parts, count, linked in blocks.values() if count >= 8 and linked * 2 < count and (count >= 25 or SENTENCE_END.search(" ".join(parts) + " "))]
+
+
+def prose_words(root) -> int:
+    return sum(count for _, count in prose_blocks(root))
+
+
+def densest_container(root) -> tuple[Any, int]:
+    blocks = prose_blocks(root)
+    scores: dict[int, list[Any]] = {}
+    for node, count in blocks:
+        for weight, ancestor in ((1.0, node.parent), (0.5, node.parent.parent if node.parent is not None else None)):
+            if ancestor is not None:
+                scores.setdefault(id(ancestor), [ancestor, 0.0])[1] += weight * count
+    if not scores:
+        return None, 0
+    best = max(scores.values(), key=lambda item: item[1])[0]
+    return best, sum(count for node, count in blocks if node is best or best in node.parents)
+
+
+CONTENT_CLASS = re.compile(r"(^|[\s_-])(entry-content|post-content|post_content|article-body|articlebody|article__body|article-content|article__content|post-body|post__content|entry__content|blog-content|single-content|story-body|fl-post-content|et_pb_post_content|elementor-widget-theme-post-content|wp-block-post-content|news-content|nyhet-content|rich-text)($|[\s_-])", re.I)
+
+
+def content_root(soup: BeautifulSoup) -> tuple[Any, int]:
+    candidates = [node for node in soup.find_all(True) if node.get("itemprop") == "articleBody" or CONTENT_CLASS.search(" ".join(node.get("class") or []) + " " + str(node.get("id") or ""))]
+    candidates += soup.find_all("article") + soup.find_all("main") + soup.find_all(attrs={"role": "main"})
+    if candidates:
+        words, best = max(((prose_words(node), node) for node in candidates), key=lambda pair: pair[0])
+        return best, words
+    container, words = densest_container(soup.body or soup)
+    return (container if container is not None and words else soup.body or soup), words
+
+
+def _object_url(item: dict[str, Any]) -> str | None:
+    for key in ("url", "mainEntityOfPage", "@id"):
+        value = item.get(key)
+        if isinstance(value, dict):
+            value = value.get("@id") or value.get("url")
+        if isinstance(value, str) and value.startswith("http"):
+            return value
+    return None
+
+
+def article_signals(soup: BeautifulSoup, objects: list[dict[str, Any]], url: str = "") -> dict[str, Any]:
+    types = {kind for item in objects for kind in types_of(item)}
+    own_articles = [item for item in objects if types_of(item) & ARTICLE_TYPES and _same_page(_object_url(item), url)]
+    og_type = (meta(soup, "og:type") or "").lower()
+    product = bool(types & PRODUCT_TYPES and not types & ARTICLE_TYPES) or og_type in ("product", "og:product", "product.item", "product.group")
+    for tag in soup(NON_CONTENT_TAGS):
+        tag.decompose()
+    banners = [node for node in soup.find_all(["div", "section", "dialog", "p", "span"]) if any(BANNER.search(token) for token in [*(node.get("class") or []), str(node.get("id") or "")])]
+    for tag in banners:
+        if not tag.decomposed and len(tag.get_text(" ", strip=True)) < 2000:
+            tag.decompose()
+    root, words = content_root(soup)
+    text = re.sub(r"\s+", " ", root.get_text(" ", strip=True))
+    return {
+        "article_markup": bool(own_articles) or og_type == "article",
+        "product_markup": product,
+        "og_type": og_type or None,
+        "prose_words": words,
+        "prices": len(PRICE_PATTERN.findall(text)),
+        "placeholder": bool(PLACEHOLDER_TEXT.search(text)),
+    }
 
 
 def page_title(soup: BeautifulSoup) -> str | None:

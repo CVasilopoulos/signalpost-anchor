@@ -87,11 +87,13 @@ class Ledger:
         self.checked_sources: set[str] = set()
         self.withheld: list[dict[str, Any]] = []
 
-    def withhold(self, rule: str, field: str, value: Any, *, url: str | None = None, fetched: Fetched | None = None, detail: str | None = None) -> None:
+    def withhold(self, rule: str, field: str, value: Any, *, url: str | None = None, fetched: Fetched | None = None, detail: str | None = None, found_in: str | None = None) -> None:
         record = {"rule": rule, "field": field, "value": str(value)[:300], "url": url or (fetched.final_url if fetched else None)}
         if fetched is not None:
             record["source_url"] = fetched.final_url
             record["content_sha256"] = fetched.sha256
+        if found_in and found_in != record.get("source_url"):
+            record["found_in"] = found_in
         if detail:
             record["detail"] = detail[:300]
         if record not in self.withheld:

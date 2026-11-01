@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from . import AGENT_NAME, __version__
+from . import AGENT_NAME, __version__, whatsnew
 from .context import CompanyContext
 from .envelope import build_envelope, failure_envelope
 from .http import Fetcher, SnapshotStore, request_counter
@@ -227,7 +227,9 @@ async def run_batch(options: Options, fetcher_factory: Any = None) -> tuple[list
     for org, record in records:
         ctx = contexts.get(org)
         if ctx is None:
-            envelopes.append(apply_refresh(failure_envelope(org, record, run_meta, "input is not a valid 9-digit Norwegian organisation number (mod-11 check failed)"), None))
+            envelope = apply_refresh(failure_envelope(org, record, run_meta, "input is not a valid 9-digit Norwegian organisation number (mod-11 check failed)"), None)
+            envelope["whats_new"] = whatsnew.build(envelope)
+            envelopes.append(envelope)
             continue
         try:
             synthesis = build_synthesis(ctx)
@@ -238,12 +240,17 @@ async def run_batch(options: Options, fetcher_factory: Any = None) -> tuple[list
                 "llm_calls": 0,
             }
             envelope = build_envelope(ctx, dict(run_meta), synthesis, operations, record)
-            envelope = apply_refresh(envelope, previous.get(org))
+            rechecked = {url for item in ctx.ledger.withheld for url in (item.get("source_url"), item.get("found_in")) if url}
+            envelope = apply_refresh(envelope, previous.get(org), rechecked)
+            whatsnew.mark_rule_withdrawals(envelope, ctx.ledger.withheld)
+            envelope["whats_new"] = whatsnew.build(envelope)
             if envelope["changes"] or not envelope["refresh"].get("is_first_run", True):
-                envelope["synthesis"] = build_synthesis(ctx, envelope["changes"], refreshed=True)
+                envelope["synthesis"] = build_synthesis(ctx, envelope["changes"], refreshed=True, whats_new=envelope["whats_new"])
             envelopes.append(envelope)
         except Exception as exc:
-            envelopes.append(apply_refresh(failure_envelope(org, record, run_meta, f"envelope assembly failed: {type(exc).__name__}: {exc}"), None))
+            envelope = apply_refresh(failure_envelope(org, record, run_meta, f"envelope assembly failed: {type(exc).__name__}: {exc}"), None)
+            envelope["whats_new"] = whatsnew.build(envelope)
+            envelopes.append(envelope)
     await fetcher.close()
     report = build_report(options, run_meta, envelopes, raw_records, duplicates, invalid, timings, fetcher, nav_index, nav_stats, external_result, previous_path, started_clock)
     report["filing_copy_years"] = filing_stats
@@ -338,6 +345,7 @@ def build_report(options, run_meta, envelopes, raw_records, duplicates, invalid,
         "claims": {"total": total_claims, "per_company_mean": round(total_claims / n, 1), "by_field": dict(claim_fields.most_common())},
         "website_verification_methods": dict(verification_methods),
         "changes": {"total": sum(change_types.values()), "by_type": dict(change_types), "companies_with_previous": sum(1 for envelope in envelopes if not (envelope.get("refresh") or {}).get("is_first_run", True))},
+        "whats_new": whats_new_report(envelopes),
         "jobs_feed": {
             "enabled": nav_index is not None,
             "state": nav_index.state if nav_index else None,
@@ -365,6 +373,33 @@ def build_report(options, run_meta, envelopes, raw_records, duplicates, invalid,
             "llm_calls": 0,
             "paid_apis": [],
         },
+    }
+
+
+def whats_new_report(envelopes: list[dict[str, Any]], limit: int = 300) -> dict[str, Any]:
+    since: Counter[str] = Counter()
+    latest: Counter[str] = Counter()
+    items: list[dict[str, Any]] = []
+    companies = withdrawn = 0
+    for envelope in envelopes:
+        block = envelope.get("whats_new") or {}
+        found = block.get("since_previous_run") or []
+        companies += bool(found)
+        withdrawn += len(block.get("withheld_by_newer_rule") or [])
+        name = (envelope.get("legal_identity") or {}).get("legal_name")
+        for item in found:
+            since[item["kind"]] += 1
+            items.append({"organisation_number": envelope.get("organisation_number"), "name": name, "kind": item["kind"], "headline": item["headline"], "why": item["why"], "materiality": item["materiality"]})
+        for item in block.get("latest_movements") or []:
+            latest[item["kind"]] += 1
+    items.sort(key=lambda item: (item["materiality"] != "material", item["organisation_number"] or ""))
+    return {
+        "companies_compared": sum(1 for envelope in envelopes if not (envelope.get("whats_new") or {}).get("is_first_run", True)),
+        "companies_with_new_items": companies,
+        "since_previous_run_by_kind": dict(since.most_common()),
+        "removals_caused_by_a_newer_publication_rule": withdrawn,
+        "latest_movements_by_kind": dict(latest.most_common()),
+        "items": items[:limit],
     }
 
 

@@ -72,7 +72,7 @@ def _summary(kind: str, claim: dict[str, Any], previous_value: Any = None) -> st
     return f"{label}: {str(previous_value)[:60]} → {str(value)[:60]}"
 
 
-def apply_refresh(envelope: dict[str, Any], previous: dict[str, Any] | None) -> dict[str, Any]:
+def apply_refresh(envelope: dict[str, Any], previous: dict[str, Any] | None, rechecked_urls: set[str] | None = None) -> dict[str, Any]:
     now = envelope["run"]["completed_at"]
     claims: list[dict[str, Any]] = envelope["claims"]
     for claim in claims:
@@ -130,7 +130,7 @@ def apply_refresh(envelope: dict[str, Any], previous: dict[str, Any] | None) -> 
         changes.append(change)
         history.append({"superseded_at": now, "superseded_by_claim": claim["id"], "claim": old, "evidence": keep_evidence(old)})
     checked_sources = set(envelope.get("sources_checked") or [])
-    fetched_urls = {item.get("final_url") for item in envelope.get("source_snapshots", [])} | {item.get("requested_url") for item in envelope.get("source_snapshots", [])}
+    fetched_urls = {item.get("final_url") for item in envelope.get("source_snapshots", [])} | {item.get("requested_url") for item in envelope.get("source_snapshots", [])} | (rechecked_urls or set())
 
     def source_rechecked(old: dict[str, Any]) -> bool:
         source_id = old.get("source_id") or "unknown"

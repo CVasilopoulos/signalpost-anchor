@@ -39,7 +39,7 @@ def _financial(ctx: CompanyContext, field: str, year: str, scope: str = "company
     return next((claim for claim in _claims(ctx, field) if claim.get("fiscal_year") == year and claim.get("account_scope") == scope), None)
 
 
-def build_synthesis(ctx: CompanyContext, changes: list[dict[str, Any]] | None = None, refreshed: bool = False) -> dict[str, Any]:
+def build_synthesis(ctx: CompanyContext, changes: list[dict[str, Any]] | None = None, refreshed: bool = False, whats_new: dict[str, Any] | None = None) -> dict[str, Any]:
     ledger = ctx.ledger
     paragraphs: list[dict[str, Any]] = []
 
@@ -229,8 +229,13 @@ def build_synthesis(ctx: CompanyContext, changes: list[dict[str, Any]] | None = 
         add("footprint", "Public footprint: " + "; ".join(footprint) + ".", foot_ids)
 
     change_text, change_ids = _registry_changes(ctx)
-    if changes:
-        material = [change for change in changes if change.get("materiality") == "material"]
+    highlights = (whats_new or {}).get("since_previous_run") or []
+    if highlights:
+        when = str((whats_new or {}).get("previous_completed_at") or "")[:10]
+        change_text.append(f"Since the previous run{f' ({when})' if when else ''}: " + "; ".join(item["headline"] for item in highlights[:5]) + (f"; and {len(highlights) - 5} more" if len(highlights) > 5 else "") + ".")
+        change_ids += [cid for item in highlights[:5] for cid in item["claim_ids"]]
+    elif changes:
+        material = [change for change in changes if change.get("materiality") == "material" and not change.get("cause")]
         if material:
             change_text.append(f"Since the previous run: {len(material)} material change{'s' if len(material) != 1 else ''} (" + "; ".join(change["summary"] for change in material[:4]) + ").")
         elif changes:

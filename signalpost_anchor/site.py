@@ -168,6 +168,9 @@ def company_summary(envelope: dict[str, Any], key: str) -> dict[str, Any]:
         "sections": "".join(STATE_CODES.get(section_state(name), "-") for name in SECTION_ORDER),
         "signals": [item.get("signal") for item in synthesis.get("signals") or [] if isinstance(item, dict) and item.get("signal")],
         "changes": len(envelope.get("changes") or []),
+        "new": len((envelope.get("whats_new") or {}).get("since_previous_run") or []),
+        "new_headline": next((item.get("headline") for item in (envelope.get("whats_new") or {}).get("since_previous_run") or [] if isinstance(item, dict)), None),
+        "movements": len((envelope.get("whats_new") or {}).get("latest_movements") or []),
         "ceo": _first(live, "leadership.ceo"),
         "chair": _first(live, "leadership.board_chair"),
         "auditor": _first(live, "leadership.auditor"),
@@ -227,6 +230,7 @@ def report_summary(report: dict[str, Any], envelopes: list[dict[str, Any]]) -> d
         "claims_total": claims.get("total"),
         "claims_per_company": claims.get("per_company_mean"),
         "changes": report.get("changes") or {},
+        "whats_new": {key: value for key, value in (report.get("whats_new") or {}).items() if key != "items"},
         "jobs_feed": {key: jobs.get(key) for key in ("enabled", "state", "active_ads_indexed", "verified", "error")} if jobs else {},
         "operations": {key: operations.get(key) for key in ("requests", "runtime_s", "third_party_cost_usd")} if operations else {},
     }

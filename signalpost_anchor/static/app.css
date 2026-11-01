@@ -448,7 +448,10 @@ h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus { outline: none; }
   .timeline time { grid-column: 1 / -1; }
 }
 
-.changes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.changes, .whatsnew { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.whatsnew li { padding: 10px 12px; border-radius: 8px; background: var(--surface-2); }
+.whatsnew .why { font-size: .9rem; margin-top: 2px; overflow-wrap: anywhere; }
+.whatsnew-line { margin: 10px 0 0; font-size: .95rem; }
 .changes li { padding: 10px 12px; border-radius: 8px; background: var(--surface-2); }
 .change-head { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-bottom: 4px; }
 .delta { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 6px 10px; align-items: start; font-size: .9rem; }

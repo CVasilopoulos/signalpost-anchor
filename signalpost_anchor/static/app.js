@@ -46,6 +46,13 @@
     unaudited_accounts: "Accounts not audited", currently_hiring: "Currently hiring"
   };
   const SEVERITY_TONE = { high: "bad", medium: "warn", low: "neutral", info: "info" };
+  const NEW_KIND_LABEL = {
+    new_article: "New article", new_accounts_year: "New accounts year", restated_figure: "Restated figure", website_verified: "Website verified",
+    website_lost: "Website lost", website_moved: "Website moved", new_social: "New social account", social_removed: "Social account removed",
+    new_job: "New job ad", job_closed: "Job ad closed", status_changed: "Status changed", name_changed: "Name changed", leader_changed: "New leader",
+    auditor_changed: "New auditor", address_moved: "Address moved", headcount_moved: "Headcount moved", revenue_move: "Revenue move",
+    result_turned: "Result turned", recent_article: "Recent article", recent_job: "Recent job ad", recent_registry_event: "Recent registry event"
+  };
   const COVERAGE_LABEL = {
     official_identity: "Official identity", annual_accounts: "Annual accounts", leadership: "Leadership",
     registered_workplaces: "Registered workplaces", verified_website: "Verified website",
@@ -544,7 +551,7 @@
       if (L.web && !(r.website && r.website_state === "available")) return false;
       if (L.hiring && !r.hiring) return false;
       if (L.accounts && !r.accounts) return false;
-      if (L.changed && !(r.changes > 0)) return false;
+      if (L.changed && !(r.new > 0 || r.changes > 0)) return false;
       for (let i = 0; i < terms.length; i += 1) if (r._hay.indexOf(terms[i]) === -1) return false;
       return true;
     });
@@ -593,6 +600,15 @@
       ["Runtime", isNum(ops.runtime_s) ? fmtNum(ops.runtime_s) + " s" : "—"],
       ["Third-party cost", isNum(ops.third_party_cost_usd) ? "USD " + ops.third_party_cost_usd.toFixed(2) : "—"]
     ];
+    const wn = REPORT.whats_new || {};
+    if (isNum(wn.companies_compared) && wn.companies_compared > 0) {
+      const kinds = wn.since_previous_run_by_kind || {};
+      const kindText = Object.keys(kinds).map(function (k) { return kinds[k] + " " + (NEW_KIND_LABEL[k] || humanise(k)).toLowerCase(); }).join(", ");
+      add(card, h("p", { class: "whatsnew-line" }, h("strong", null, "Since the previous run: "),
+        wn.companies_with_new_items ? fmtNum(wn.companies_with_new_items) + " of " + fmtNum(wn.companies_compared) + " compared companies have something new" + (kindText ? " (" + kindText + ")" : "") + ". " : "nothing new in " + fmtNum(wn.companies_compared) + " compared companies. ",
+        wn.companies_with_new_items ? h("a", { href: "#/?f=changed" }, "Show them") : null,
+        wn.removals_caused_by_a_newer_publication_rule ? h("span", { class: "muted small" }, " " + fmtNum(wn.removals_caused_by_a_newer_publication_rule) + " earlier items are now withheld by a stricter publication rule; they are not counted as changes at the source.") : null));
+    }
     const det = h("details", { class: "run-more" });
     if (window.matchMedia && window.matchMedia("(min-width: 720px)").matches) det.open = true;
     add(det, h("summary", null, "Run details and coverage across companies"));
@@ -645,7 +661,7 @@
     const L = state.list;
     const stateCounts = optionCounts(function (r) { return r.state; });
     const statusCounts = optionCounts(function (r) { return r.status; });
-    const anyChanged = ROWS.some(function (r) { return r.changes > 0; });
+    const anyChanged = ROWS.some(function (r) { return r.changes > 0 || r.new > 0; });
     const update = function () { state.shown = PAGE; writeListHash(); updateResults(); };
     const controls = h("div", { class: "controls" },
       selectField("f-state", "Research state", L.state, [["", "All states"]].concat(Object.keys(stateCounts).map(function (k) { return [k, (STATE_LABEL[k] || humanise(k)) + " (" + stateCounts[k] + ")"]; })), function (v) { L.state = v; update(); }),
@@ -654,7 +670,7 @@
         checkField("f-web", "Verified website", L.web, function (v) { L.web = v; update(); }),
         checkField("f-hiring", "Hiring signals", L.hiring, function (v) { L.hiring = v; update(); }),
         checkField("f-accounts", "Annual accounts", L.accounts, function (v) { L.accounts = v; update(); }),
-        anyChanged ? checkField("f-changed", "Changes since last run", L.changed, function (v) { L.changed = v; update(); }) : null),
+        anyChanged ? checkField("f-changed", "New or changed since last run", L.changed, function (v) { L.changed = v; update(); }) : null),
       selectField("f-sort", "Sort by", L.sort, [["", "Best match / name"], ["name", "Name A–Z"], ["revenue", "Revenue (highest first)"], ["employees", "Employees (most first)"], ["data", "Data found (most claims)"]], function (v) { L.sort = v; update(); }));
     const meta = h("div", { class: "result-meta" });
     const list = h("ol", { class: "results", "aria-label": "Companies" });
@@ -749,7 +765,7 @@
       r.profiles ? h("span", { class: "chip" }, r.profiles + " profiles") : null,
       r.jobs ? h("span", { class: "chip on" }, r.jobs + " job ads") : (r.hiring ? h("span", { class: "chip on" }, "Hiring page") : null),
       r.latest_activity ? h("span", { class: "chip" }, "Latest activity " + r.latest_activity) : null,
-      r.changes ? h("span", { class: "chip on" }, r.changes + " changes") : null,
+      r.new ? h("span", { class: "chip on", title: r.new_headline || "" }, r.new + " new since last run") : (r.changes ? h("span", { class: "chip on" }, r.changes + " changes") : null),
       r.stale ? h("span", { class: "chip" }, r.stale + " stale") : null,
       sectionsStrip(r.sections)
     ];
@@ -1311,22 +1327,47 @@
     if (typeof v === "object") return JSON.stringify(v);
     return String(v);
   }
+  function whatsNewList(data, items) {
+    return h("ul", { class: "whatsnew" }, items.map(function (item) {
+      return h("li", null,
+        h("div", { class: "change-head" }, badge(NEW_KIND_LABEL[item.kind] || humanise(item.kind || "change"), item.materiality === "material" ? "warn" : "info", true), h("span", { class: "small muted" }, SECTION_TITLE[item.section] || humanise(item.section || ""))),
+        h("div", { class: "t" }, item.headline || ""),
+        item.why ? h("div", { class: "why" }, h("span", { class: "muted" }, "Why it matters: "), item.why) : null,
+        (item.claim_ids || []).filter(function (id) { return data.claimById.has(id); }).length ? h("div", { class: "change-actions" }, verifyBtn(data, (item.claim_ids || []).filter(function (id) { return data.claimById.has(id); }), { label: "Verify", what: "evidence for this item" })) : null);
+    }));
+  }
   function changesPanel(data) {
     const env = data.env;
     const ref = env.refresh || {};
+    const wn = env.whats_new || {};
+    const fresh = (wn.since_previous_run || []).filter(function (x) { return x && typeof x === "object"; });
+    const moves = (wn.latest_movements || []).filter(function (x) { return x && typeof x === "object"; });
+    const ruleGone = (wn.withheld_by_newer_rule || []).filter(function (x) { return x && typeof x === "object"; });
     const changes = (env.changes || []).filter(function (c) { return c && typeof c === "object"; });
     const stale = data.claims.filter(function (c) { return c.stale; });
     const history = (env.history || []).filter(function (x) { return x && x.claim; });
     const panel = h("section", { class: "card panel", id: "s-changes", "aria-labelledby": "h-changes" },
-      h("div", { class: "panel-head" }, h("div", { class: "titles" }, h("h2", { id: "h-changes", tabindex: "-1" }, "What changed since the last run"), badge(changes.length + " change" + (changes.length === 1 ? "" : "s"), changes.length ? "info" : "neutral", true))));
+      h("div", { class: "panel-head" }, h("div", { class: "titles" }, h("h2", { id: "h-changes", tabindex: "-1" }, "What changed since the last run"), badge(fresh.length ? fresh.length + " new" : changes.length + " change" + (changes.length === 1 ? "" : "s"), fresh.length || changes.length ? "info" : "neutral", true))));
+    if (fresh.length) {
+      add(panel, h("h3", { class: "group-title" }, "New since the last run"));
+      add(panel, whatsNewList(data, fresh));
+    }
+    if (ruleGone.length) {
+      add(panel, h("p", { class: "small muted" }, ruleGone.length + " item" + (ruleGone.length === 1 ? " was" : "s were") + " published in the previous run and " + (ruleGone.length === 1 ? "is" : "are") + " now withheld by a stricter publication rule (" + ruleGone.map(function (x) { return humanise(x.rule); }).filter(function (v, i, a) { return a.indexOf(v) === i; }).join(", ") + "); this is not a change at the source."));
+    }
+    if (moves.length) {
+      add(panel, h("h3", { class: "group-title" }, "Latest movements in this run's evidence"));
+      add(panel, whatsNewList(data, moves));
+    }
     if (ref.is_first_run || !ref.previous_run_id) {
-      add(panel, h("p", { class: "muted" }, ref.is_first_run === false ? "No previous run is recorded." : "This is the first run for this company, so there is nothing to compare yet. The next run will list new, removed and changed values here."));
+      add(panel, h("p", { class: "muted" }, ref.is_first_run === false ? "No previous run is recorded." : "This is the first run for this company, so there is nothing to compare yet. Run the same command again on the same output directory and this panel lists what is new or changed and why it matters; the previous run's evidence is kept."));
     } else {
       add(panel, h("p", { class: "small muted" }, "Compared with run ", h("span", { class: "mono" }, ref.previous_run_id), " (completed " + fmtTime(ref.previous_completed_at) + "): " +
         [["changed", ref.changed], ["added", ref.added], ["removed", ref.removed], ["unchanged", ref.unchanged], ["carried forward", ref.carried_forward]].filter(function (x) { return isNum(x[1]); }).map(function (x) { return x[1] + " " + x[0]; }).join(", ") + "."));
       if (!changes.length) add(panel, h("p", null, "No values changed since the previous run."));
     }
     if (changes.length) {
+      add(panel, h("h3", { class: "group-title" }, "Every changed value"));
       const order = { material: 0, minor: 1 };
       const sorted = changes.slice().sort(function (a, b) { return (order[a.materiality] != null ? order[a.materiality] : 2) - (order[b.materiality] != null ? order[b.materiality] : 2); });
       add(panel, h("ul", { class: "changes" }, sorted.map(function (ch) {

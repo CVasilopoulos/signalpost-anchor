@@ -23,6 +23,12 @@ SITE_HTML = """<html lang="nb"><head><title>Consto | Bygg og anlegg</title>
 <a href="mailto:firmapost@consto.no">firmapost@consto.no</a><a href="tel:+4777600000">77 60 00 00</a>
 <footer>Consto AS – org.nr. 995 754 606</footer></body></html>"""
 
+ARTICLE_HTML = """<html lang="nb"><head><title>Consto vinner kontrakt i Tromsø</title><meta property="og:type" content="article"></head><body><article><h1>Consto vinner kontrakt i Tromsø</h1>
+<p>Consto har signert kontrakt med Tromsø kommune om bygging av ny barneskole på Workinnmarka. Prosjektet har en verdi på rundt 400 millioner kroner og starter i januar.</p>
+<p>Skolen skal stå ferdig høsten 2028 og får plass til 450 elever. Prosjektet gjennomføres i samspill med kommunen og lokale underleverandører.</p></article></body></html>"""
+
+SECOND_ARTICLE_HTML = ARTICLE_HTML.replace("Consto vinner kontrakt i Tromsø", "Consto åpner ny avdeling i Alta").replace("Tromsø kommune", "Alta kommune")
+
 RSS = """<rss><channel><item><title>Consto vinner kontrakt i Tromsø</title><link>https://consto.no/nyheter/kontrakt</link><pubDate>Mon, 05 Oct 2026 08:00:00 +0200</pubDate></item></channel></rss>"""
 
 
@@ -115,7 +121,11 @@ def world(state: dict):
             if path in ("/", ""):
                 return httpx.Response(200, text=SITE_HTML.replace("HIRING_ORG", state.get("hiring_org", "Consto AS")), headers={"content-type": "text/html; charset=utf-8"})
             if path == "/feed/":
-                return httpx.Response(200, text=RSS, headers={"content-type": "application/rss+xml"})
+                return httpx.Response(200, text=state.get("rss", RSS), headers={"content-type": "application/rss+xml"})
+            if path == "/nyheter/kontrakt":
+                return httpx.Response(200, text=ARTICLE_HTML, headers={"content-type": "text/html; charset=utf-8"})
+            if path == "/nyheter/ny-avdeling":
+                return httpx.Response(200, text=SECOND_ARTICLE_HTML, headers={"content-type": "text/html; charset=utf-8"})
             if path in ("/kontakt", "/karriere"):
                 return httpx.Response(200, text="<html><head><title>Kontakt</title></head><body>Consto AS, Sjølundvegen 2, 9016 Tromsø</body></html>", headers={"content-type": "text/html"})
         return httpx.Response(404)
@@ -358,3 +368,47 @@ def test_unknowns_paragraph_gives_the_reason_for_each_gap(tmp_path):
     unknowns = next(p for p in synthesis["paragraphs"] if p["topic"] == "unknowns")
     assert "latest annual accounts and history (not available): Regnskapsregisteret returned no normalised accounts" in unknowns["text"]
     assert next(p for p in synthesis["paragraphs"] if p["topic"] == "key_points")["text"].startswith("At a glance: registered as bankrupt (konkurs)")
+
+
+NEW_ITEM_RSS = RSS.replace("<channel>", "<channel><item><title>Consto åpner ny avdeling i Alta</title><link>https://consto.no/nyheter/ny-avdeling</link><pubDate>Mon, 26 Oct 2026 08:00:00 +0100</pubDate></item>")
+PRODUCT_RSS = RSS.replace("</pubDate>", "</pubDate><category>Produkter</category>")
+
+
+def test_refresh_lists_what_is_new_with_why_it_matters_and_keeps_the_previous_evidence(tmp_path):
+    out = tmp_path / "out"
+    run_world(tmp_path, {}, [ORG], out)
+    second, report = run_world(tmp_path, {"ceo": "Kari", "revenue": 65000.0, "rss": NEW_ITEM_RSS}, [ORG], out)
+    envelope = by_org(second)[ORG]
+    new = envelope["whats_new"]["since_previous_run"]
+    kinds = {item["kind"] for item in new}
+    assert {"new_article", "leader_changed", "restated_figure"} <= kinds
+    article = next(item for item in new if item["kind"] == "new_article")
+    assert "Consto åpner ny avdeling i Alta" in article["headline"] and article["why"] and article["claim_ids"]
+    restated = next(item for item in new if item["kind"] == "restated_figure")
+    change = next(c for c in envelope["changes"] if c["id"] in restated["change_ids"])
+    assert change["previous_evidence_ids"]
+    assert report["whats_new"]["companies_with_new_items"] == 1
+    assert report["whats_new"]["since_previous_run_by_kind"]["new_article"] == 1
+    changed = next(p for p in envelope["synthesis"]["paragraphs"] if p["topic"] == "what_changed")
+    assert "New article on the company website" in changed["text"]
+
+
+def test_item_withheld_by_a_publication_rule_on_refresh_is_not_reported_as_a_change_at_the_source(tmp_path):
+    out = tmp_path / "out"
+    first, _ = run_world(tmp_path, {}, [ORG], out)
+    assert any(c["field"] == "activity.website_news" for c in by_org(first)[ORG]["claims"])
+    second, report = run_world(tmp_path, {"rss": PRODUCT_RSS}, [ORG], out)
+    envelope = by_org(second)[ORG]
+    removal = next(c for c in envelope["changes"] if c["field"] == "activity.website_news")
+    assert removal["cause"] == "withheld_by_rule:news_product_or_catalogue_page"
+    assert envelope["whats_new"]["since_previous_run"] == []
+    assert envelope["whats_new"]["withheld_by_newer_rule"][0]["rule"] == "news_product_or_catalogue_page"
+    assert report["whats_new"]["removals_caused_by_a_newer_publication_rule"] == 1
+
+
+def test_first_run_has_nothing_since_a_previous_run_and_lists_recent_dated_items_as_latest_movements(tmp_path):
+    envelopes, _ = run_world(tmp_path, {}, [ORG])
+    block = by_org(envelopes)[ORG]["whats_new"]
+    assert block["is_first_run"] is True and block["since_previous_run"] == []
+    kinds = [item["kind"] for item in block["latest_movements"]]
+    assert "recent_article" in kinds

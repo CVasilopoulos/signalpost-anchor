@@ -18,6 +18,8 @@ def main() -> None:
     parser.add_argument("--command", required=True)
     parser.add_argument("--machine", default="")
     parser.add_argument("--refresh-report")
+    parser.add_argument("--whats-new-report", help="run-report.json of a refresh against an earlier run")
+    parser.add_argument("--whats-new-label", default="")
     args = parser.parse_args()
     run_dir = Path(args.run_dir)
     report = json.loads((run_dir / "run-report.json").read_text(encoding="utf-8"))
@@ -115,6 +117,21 @@ def main() -> None:
             f"The same command was run again on the same output directory (`{refresh['run']['run_id']}`): {refresh['changes']['total']} change records across {refresh['changes']['companies_with_previous']} companies with a previous envelope ({', '.join(f'{key}: {value}' for key, value in refresh['changes']['by_type'].items()) or 'none'}), runtime {refresh['operations']['runtime_s']} s.",
             "",
         ]
+    if args.whats_new_report:
+        later = json.loads(Path(args.whats_new_report).read_text(encoding="utf-8"))
+        block = later.get("whats_new") or {}
+        kinds = ", ".join(f"{count} {kind.replace('_', ' ')}" for kind, count in (block.get("since_previous_run_by_kind") or {}).items()) or "nothing"
+        lines += [
+            "## What changed since the previous run",
+            "",
+            f"{args.whats_new_label}Run `{later['run']['run_id']}` against its previous envelopes: {block.get('companies_with_new_items', 0)} of {block.get('companies_compared', 0)} compared companies have something new ({kinds}). {block.get('removals_caused_by_a_newer_publication_rule', 0)} items the previous run published are now withheld by a stricter publication rule; they are listed separately and not counted as changes at the source. Latest movements in that run's own evidence: " + (", ".join(f"{count} {kind.replace('_', ' ')}" for kind, count in (block.get("latest_movements_by_kind") or {}).items()) or "none") + ".",
+            "",
+            "| Org. no. | Company | What is new | Why it matters |",
+            "|---|---|---|---|",
+        ]
+        for item in (block.get("items") or [])[:30]:
+            lines.append(f"| {item['organisation_number']} | {(item.get('name') or '').replace('|', '/')} | {item['headline'].replace('|', '/')} | {item['why']} |")
+        lines.append("")
     lines += ["## Per company", "", "| Org. no. | Name | Selection | State | Claims | Website | Profiles | Jobs | Account years | Unknown sections |", "|---|---|---|---|---|---|---|---|---|---|"]
     for envelope in envelopes:
         claims = envelope["claims"]
