@@ -33,6 +33,36 @@ Kontakt oss Systemhus Hovedkontor: Sandhorngata 43 Postboks 1043 8008 Bodø Copy
     "<title>Østenfjeldske Bygg &amp; Entreprenør AS | Systemhus</title>",
 )
 
+ELIT_HOME = html(
+    """<nav><a href="/info/om-oss">Om oss</a><a href="/karriere/ledige-stillinger">Ledige stillinger</a></nav>
+<footer>ELIT AS Org.nr. 978 593 593 <a href="mailto:firmapost@elit.no">firmapost@elit.no</a> <a href="tel:+4722000000">22 00 00 00</a></footer>""",
+    "<title>Elit - varmekabler og termostater</title>",
+)
+ELIT_ABOUT = html(
+    """<p>Kontakt oss: <a href="mailto:firmapost@elit.no">firmapost@elit.no</a></p>
+<p>Ida Finngården, markedskoordinator <a href="mailto:ida@elit.no">ida@elit.no</a></p>
+<p>Ordre: <a href="mailto:ordre.bergen@elit.no">ordre.bergen@elit.no</a></p>
+<p>Lager Lillestrøm Senter: <a href="mailto:lillestrom@elit.no">lillestrom@elit.no</a></p>""",
+    "<title>Om oss - Elit</title>",
+)
+ELIT_JOBS = html(
+    """<p>Spørsmål om stillingen? Kontakt HR-direktør Kari Nordmann på <a href="tel:+4793643483">936 43 483</a> eller <a href="mailto:hr@elit.no">hr@elit.no</a></p>""",
+    "<title>Ledige stillinger - Elit</title>",
+)
+
+PEAB_SECTION_PAGE = html(
+    """<nav><a href="/jobbhososs/">Jobb hos oss</a></nav>
+<p>Peab Bygg har virksomhet i Nord-Norge og på Østlandet.</p>
+<p>Region Nord: <a href="tel:+4746620564">466 20 564</a> Region Øst: <a href="tel:+4747977414">479 77 414</a></p>
+<footer><p>Kontakt Peab Norge E-post: <a href="mailto:info@peab.no">info@peab.no</a> Telefon: <a href="tel:+4723303000">+47 23 30 30 00</a></p></footer>""",
+    "<title>Peab Bygg - Peab</title>",
+)
+PEAB_GROUP_JOBS = html(
+    """<p>Spørsmål? Kontakt HR-direktør på <a href="tel:+4793643483">936 43 483</a></p>
+<footer><p>Kontakt Peab Norge E-post: <a href="mailto:info@peab.no">info@peab.no</a> Telefon: <a href="tel:+4723303000">+47 23 30 30 00</a></p></footer>""",
+    "<title>Jobb hos oss - Peab</title>",
+)
+
 HALLINGDAL_HOME = html('<a href="/no/hallingdal_hytteservice/kontaktpersoner/">Kontakt</a>', "<title>Hallingdal Hytteservice AS - Hallingdal Hytteservice</title>")
 HALLINGDAL_CONTACT = html(
     """<a class="ico icon-twitter" href="https://twitter.com/h_hytteservice"></a>
@@ -441,7 +471,7 @@ def test_dated_showroom_sale_post_is_withheld_while_a_dated_story_from_the_same_
 def test_brand_only_linkedin_and_youtube_of_an_international_group_are_withheld_for_its_norwegian_company():
     entity = {"navn": "PEAB BYGG AS", "organisasjonsform": {"kode": "AS"}, "hjemmeside": "www.peab.no/bygg", "telefon": "77 66 10 30", "forretningsadresse": {"adresse": ["Hjalmar Johansens gate 25"], "postnummer": "9007"}}
     ctx = research("943672520", entity, {"https://www.peab.no/bygg": ("redirect", "https://peab.no/bygg/"), "https://peab.no/bygg/": PEAB_BYGG_PAGE})
-    assert values(ctx, "website.official_url") == ["https://peab.no/"]
+    assert values(ctx, "website.official_url") == ["https://peab.no/bygg/"]
     assert sorted(values(ctx, "profile.")) == ["https://www.facebook.com/peabnorge", "https://www.instagram.com/peabnorge"]
     rules = withheld_rules(ctx, "profile.")
     assert rules["https://www.linkedin.com/company/peab"] == "social_group_or_foreign_sibling_account"
@@ -567,3 +597,22 @@ def test_product_markup_and_price_lists_are_not_articles_even_on_a_news_path():
     prices = page_from("https://example.no/nyheter/prisliste", html("<article><p>Våre priser denne uken er gode for alle som trenger noe nytt.</p><p>Sofa 12 490,-</p><p>Stol 4 490,-</p><p>Bord 7 990,-</p><p>Lampe 990,-</p></article>", "<title>Ukens priser</title>"))
     assert news_page_rejection(product, product.fetched.final_url, "example.no", True) == "news_product_or_catalogue_page"
     assert news_page_rejection(prices, prices.fetched.final_url, "example.no", True) == "news_price_list_or_shop_page"
+
+
+def test_personal_mailbox_on_the_about_page_and_recruiter_contacts_on_a_job_page_are_not_published():
+    entity = {"navn": "ELIT AS", "organisasjonsform": {"kode": "AS"}, "hjemmeside": "elit.no", "forretningsadresse": {"poststed": "LILLESTRØM", "kommune": "LILLESTRØM"}}
+    pages = {"https://elit.no/": ELIT_HOME, "https://elit.no/info/om-oss": ELIT_ABOUT, "https://elit.no/karriere/ledige-stillinger": ELIT_JOBS}
+    ctx = research("978593593", entity, pages)
+    assert values(ctx, "website.official_url") == ["https://elit.no/"]
+    assert sorted(values(ctx, "contact.website_email")) == ["firmapost@elit.no", "lillestrom@elit.no", "ordre.bergen@elit.no"]
+    assert values(ctx, "contact.website_phone") == ["+4722000000"]
+
+
+def test_company_registered_at_a_section_of_a_group_site_keeps_its_own_numbers_but_not_the_group_footer():
+    entity = {"navn": "PEAB BYGG AS", "organisasjonsform": {"kode": "AS"}, "hjemmeside": "www.peab.no/bygg"}
+    pages = {"https://www.peab.no/bygg": ("redirect", "https://peab.no/bygg/"), "https://peab.no/bygg/": PEAB_SECTION_PAGE, "https://peab.no/jobbhososs/": PEAB_GROUP_JOBS}
+    ctx = research("943672520", entity, pages)
+    assert values(ctx, "website.official_url") == ["https://peab.no/bygg/"]
+    assert sorted(values(ctx, "contact.website_phone")) == ["+4746620564", "+4747977414"]
+    assert values(ctx, "contact.website_email") == []
+

@@ -113,6 +113,39 @@ A 1,000-company random sample from the public universe (`reports/sample-1000-com
 
 More: [list](docs/screenshots/desktop-list.png), [evidence panel](docs/screenshots/desktop-verify.png), [side-by-side compare](docs/screenshots/desktop-compare.png), [mobile list](docs/screenshots/mobile-list.png), [mobile profile](docs/screenshots/mobile-profile.png).
 
+### Revision 4 final (1.4.1): website contacts after a live link check
+
+On 3 November every link that 1.4.0 published for the 15 hand-check companies (114 links, PEAB BYGG AS included on purpose) was opened live and compared with its claim. The check was AI-assisted, not the human hand-check Builderr asked for; the sheet with a note per link is [reports/linkcheck-1.4.0-2026-11-03.csv](reports/linkcheck-1.4.0-2026-11-03.csv) (counts: `python3 tools/handcheck_counts.py reports/linkcheck-1.4.0-2026-11-03.csv --label "AI-assisted live check"`).
+
+| Source type | Links | Right | Wrong | Unsure | Right of decided |
+|---|---|---|---|---|---|
+| website | 14 | 13 | 1 | 0 | 13/14 |
+| social | 20 | 18 | 0 | 2 | 18/18 |
+| news | 32 | 32 | 0 | 0 | 32/32 |
+| jobs | 3 | 3 | 0 | 0 | 3/3 |
+| registry and external profiles | 21 | 21 | 0 | 0 | 21/21 |
+| contacts read from websites | 24 | 20 | 4 | 0 | 20/24 |
+| all | 114 | 107 | 5 | 2 | 107/112 |
+
+The five wrong links: `ida@elit.no` (ELIT AS), an employee's mailbox on the about page, which the mailbox rule let through because "ida" is not the name of a registry role holder; and for PEAB BYGG AS, `peab.no` as its website where Brønnøysund lists `www.peab.no/bygg`, `info@peab.no` and `+47 23 30 30 00` from the "Kontakt Peab Norge" group footer, and `+47 936 43 483`, the Peab Norge HR director's number on the group careers page. The two unsure are the `peabnorge` Facebook and Instagram accounts (Peab Norge, not Peab Bygg alone).
+
+1.4.1 changes only how contacts are read from a website, and the website URL when the registry lists a section of a larger site:
+
+- **Mailboxes.** A website email is published when its local part is a role word (`post`, `firmapost`, `ordre.bergen`, `sentralbordet`, `apenhetsloven`, …), a word of the company's name, the domain, a town of the registered address or a country (`norway@`), or a single short word that does not appear on the page as a first name followed by a surname (`ida@` next to "Ida Finngården" is withheld; Norwegian letters are folded, so `orjan@` next to "Ørjan …" is too). Mailboxes named after registry role holders stay withheld, as before. A mailbox repeated on several pages now counts once toward the limit of three per company.
+- **Phone numbers** are not read from careers, press or news pages (`/jobb/`, `/ledige-stillinger/`, `/presse/`, `/media/`), where they belong to recruiters and press officers.
+- **A company registered at a section of a larger site.** When Brønnøysund lists a URL with a path (`www.peab.no/bygg`) and that page verifies, the section is the published website (`https://peab.no/bygg/`), and contacts that also appear on the site's pages outside the section (the group footer, the group careers page) are not published as the company's.
+
+Replay on the 1 November recordings, 1.4.0 → 1.4.1 (for Builderr's sample, 1.4.0 replayed on the same day as 1.4.1, because one news item there depends on the run date), companies / facts:
+
+| Field family | Smoke 100 | Random 100 | 1,000 | Builderr 100 |
+|---|---|---|---|---|
+| Verified website (company's own) | 31 → 31 | 13 → 13 | 110 → 110 | 78 → 78 (Peab Bygg's moves from `peab.no` to `peab.no/bygg/`) |
+| Contact read from the website | 24 / 57 → 24 / 54 | 11 / 19 → 11 / 19 | 86 / 180 → 86 / 173 | 63 / 137 → 62 / 118 |
+
+No other family changes (filed-copy years differ between any two runs because that lookup is rate-limited). 30 website contacts are withheld and 1 is added (`post@bjornsen-advokatfirma.no`, which two partners' mailboxes had crowded out of the limit of three). By page and rule, the 30 are: 11 personal mailboxes (first name and surname shown next to them on the page, such as `orjan@selbuvvs.no` beside "Ørjan Kringen" on a staff list, or initials on a careers or press page, such as `kdbr@entra.no`), 14 numbers on careers, press or media pages (AF Gruppen, Entra, Nordic Door, Consto, Plany, Nor-El, Norsk Countrytreff), Peab Norge's footer email and switchboard, the Peab Norge HR director's and the Peab Bygg HR manager's numbers, and one loss: `porsgrunn@teknomed.no`, a branch mailbox whose town is not in the registered address.
+
+On the 15 link-check companies, run live on 3 November: all five wrong links are gone, and 31 of the 33 right website and contact links remain. `+47 982 28 943` is no longer published: it is the number of Peab Bygg's HR manager, which the group careers page also shows. `solvangship.no` was not verified by 1.4.0 or 1.4.1 in that day's live runs (a change on the live site, not the rule). Tests: 106 (two new cases built from these pages).
+
 ### Revision 4 (1.4.0) against revision 3 (1.3.0, `2e5f32a`)
 
 Builderr's review of revision 3 (1 November) found news items that were product or sale pages ("Showroom Salg"), a LinkedIn page of a Swedish group published for a Norwegian company, and a parked appelx.com chosen over the company's appelx.no, and asked for a human hand-check per source type and a "what changed since the last run" view. 1.4.0 answers each point:
@@ -153,7 +186,7 @@ That is the recall cost: 27 genuine posts (26 very short ones and one real artic
 
 **What changed since the last run, on real data.** Against 1.3.0's envelopes of the day before (a weekend), nothing had changed at the source for the smoke batch or the 1,000 sample; the only differences were items a stricter rule now withholds (1 and 8), reported separately. Against 1.2.0's 1,000-sample envelopes of 23 October (nine days), 11 companies had something new (`reports/sample-1000-since-1.2.0-run-report.json`): a company went into liquidation, a registered name changed, three CEO or chair changes, a business address moved, a 2026 accounts year was filed (revenue up 471% on 2025), a job ad was posted and an older one closed, four new articles, one older article found for the first time and one new Instagram link; 11 items the 1.2.0 run had published are now withheld by a newer rule and are listed as such, not as changes. Website, social and news rules changed between 1.2.0 and 1.4.0, so changes in those families over this window can also come from the rules; registry, accounts and NAV items cannot.
 
-**Hand-check.** The sheet for a human check covers 15 companies drawn with a fixed seed from the four batches so that every source type appears (PEAB BYGG AS included on purpose): 114 links (website 14, social 20, news 32, jobs 3, registry and external profiles 21, contacts read from websites 24). Counts from the human check, per source type: *to be filled from the user's check* (`python3 tools/handcheck_counts.py <filled sheet>`). A separate AI-assisted review of the same 114 links against the cached pages (the model checking its own work, so not the check Builderr asked for) marked 107 right, 0 wrong and 7 unsure: Peab Bygg's root domain is the Peab Norge group site, its two Peab Norge social accounts and three of its contacts belong to the group rather than to Peab Bygg, and one contact is an employee's personal mailbox.
+**Hand-check.** The sheet for a human check covers 15 companies drawn with a fixed seed from the four batches so that every source type appears (PEAB BYGG AS included on purpose): 114 links (website 14, social 20, news 32, jobs 3, registry and external profiles 21, contacts read from websites 24). It was not filled in by a person in time, so no human counts are reported. The same 114 links were checked live with AI assistance on 3 November instead (107 right, 5 wrong, 2 unsure); the counts and the fixes are in [Revision 4 final (1.4.1)](#revision-4-final-141-website-contacts-after-a-live-link-check) above.
 
 ### Revision 3 (1.3.0) against revision 2 (1.2.0, `f4a3374`)
 

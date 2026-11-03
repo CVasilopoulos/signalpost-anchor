@@ -49,6 +49,8 @@ ROLE_MAILBOXES = {
     "hello", "hei", "ordre", "order", "faktura", "invoice", "regnskap", "kundeservice", "resepsjon", "jobb", "karriere",
     "presse", "press", "media", "kontor", "bestilling", "marked", "marketing", "drift", "postmottak", "contact", "hr",
     "career", "careers", "jobs", "verksted", "butikk", "shop", "web", "nettbutikk", "kunde", "kundesenter", "personal",
+    "lager", "teknisk", "utleie", "kurs", "ekspedisjon", "innkjop", "okonomi", "tilbud", "bedrift", "prosjekt", "firma", "avdeling",
+    "sentral", "sentralbord", "sentralbordet", "apenhetsloven", "aapenhetsloven", "personvern", "privacy",
 }
 
 EMAIL_PATTERN = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")

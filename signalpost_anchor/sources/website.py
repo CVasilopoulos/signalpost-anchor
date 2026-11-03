@@ -158,6 +158,42 @@ def opening_hours_text(obj: dict[str, Any]) -> str | None:
     return None
 
 
+STRICT_CAREER_PATH = re.compile(r"(karriere|ledige[\s\-_]?stillinger|ledig[\s\-_]stilling|jobb[\s\-_]?hos|jobbe[\s\-_]hos|career|vacanc|jobs\b|stilling|/jobb(?:er)?(?:/|$|-))", re.I)
+
+
+NORDIC_FOLD = str.maketrans({"ø": "o", "Ø": "O", "å": "a", "Å": "A", "æ": "ae", "Æ": "Ae", "é": "e", "ö": "o", "ä": "a", "ü": "u"})
+
+
+PLACE_MAILBOXES = {"norway", "norge", "norden", "nordic", "nordics", "scandinavia", "skandinavia", "europe", "sweden", "sverige", "denmark", "danmark", "finland"}
+
+
+def company_mailbox(local: str, page_text: str, person_names: set[str], company_words: set[str]) -> bool:
+    local = local.lower()
+    parts = [part for part in re.split(r"[._+\-]", local) if part]
+    if not parts or any(part in person_names for part in parts):
+        return False
+    if role_word_mailbox(local) or local in company_words:
+        return True
+    folded = page_text.translate(NORDIC_FOLD)
+    return len(parts) == 1 and len(local) <= 14 and not re.search(rf"\b{re.escape(local.capitalize())}(?:[\s\-]+[A-Z][a-z]+)+\b", folded)
+
+
+def staff_contact_page(url: str) -> bool:
+    path = urlsplit(url).path
+    return bool(STRICT_CAREER_PATH.search(path) or extract.NEWS_HINTS.search(path))
+
+
+def role_word_mailbox(local: str) -> bool:
+    return any(part in extract.ROLE_MAILBOXES for part in re.split(r"[._+\-]", local.lower()) if part)
+
+
+def shared_contacts(pages: list, section: str) -> set[str]:
+    if not section:
+        return set()
+    outside = [page for page in pages if not urlsplit(page.fetched.final_url).path.startswith(section)]
+    return {email.lower() for page in outside for email in page.emails} | {extract.digits_only(phone) for page in outside for phone in page.phones} | {extract.digits_only(match.group(1)) for page in outside for match in TEXT_PHONE.finditer(page.text)}
+
+
 @dataclass
 class Page:
     fetched: Fetched
@@ -980,6 +1016,8 @@ class WebsiteResearcher:
         home = pages[0]
         base_parts = urlsplit(candidate["url"] if candidate.get("hosted_at") else home.fetched.final_url)
         site_root = f"{base_parts.scheme}://{base_parts.netloc}/"
+        if candidate["source"] in ("registry", "subunit_registry") and not candidate.get("hosted_at") and urlsplit(candidate["url"]).path.strip("/") and base_parts.path.strip("/"):
+            site_root = f"{base_parts.scheme}://{base_parts.netloc}/{base_parts.path.strip('/')}/"
         host = base_parts.hostname or ""
         domain = registered_domain(host)
         proof_page: Page = assessment.get("page") or home
@@ -1027,10 +1065,11 @@ class WebsiteResearcher:
         if group:
             ctx.website["verification"]["group_context"] = group
         self._publish_profiles(ctx, source_pages, full, partial, relatives, own=own, group=group)
-        self._publish_contacts(ctx, source_pages, domain)
+        section = urlsplit(site_root).path if urlsplit(site_root).path not in ("", "/") else ""
+        self._publish_contacts(ctx, source_pages, domain, section)
         self._publish_structured(ctx, source_pages, full, partial, relatives, own, group)
         self._publish_hiring(ctx, source_pages, domain)
-        self._publish_site_facts(ctx, source_pages, home, own)
+        self._publish_site_facts(ctx, source_pages, home, own, section)
         await self._publish_activity(ctx, source_pages, domain, deadline, home, allow_feeds=own, brand=brand[0] if brand else None)
         ledger.section("website", "available", f"Verified via {assessment['method'].replace('_', ' ')}" + ("" if own else f"; the site is shared with other organisations ({scope.get('reason')}), so profiles, contacts, news and jobs are read only from pages that show this company's organisation number or exact legal name"), sources=[SITE_SOURCE], checked_at=home.fetched.retrieved_at)
 
@@ -1201,31 +1240,46 @@ class WebsiteResearcher:
         elif not quiet:
             ledger.section("company_profiles", "not_available", "Verified website links to no social or video profile whose handle matches the company name", sources=[SITE_SOURCE])
 
-    def _publish_contacts(self, ctx: CompanyContext, pages: list[Page], domain: str) -> None:
+    def _publish_contacts(self, ctx: CompanyContext, pages: list[Page], domain: str, section: str = "") -> None:
         ledger = ctx.ledger
-        registry_email_domain = ((ctx.entity or {}).get("epostadresse") or "").split("@")[-1].lower()
+        entity = ctx.entity or {}
+        registry_email = (entity.get("epostadresse") or "").strip().lower()
+        registry_email_domain = registry_email.split("@")[-1]
+        registry_phones = {extract.digits_only(str(entity.get(key) or "")) for key in ("telefon", "mobil")} - {""}
         person_names = {part.lower() for role in ctx.roles for part in str(role.get("holder", "")).split() if len(part) > 2}
-        emails_done = 0
+        name_tokens = {part for name in ctx.own_names() for part in re.split(r"[^a-z0-9æøå]+", name.lower()) if len(part) >= 4}
+        places = {str((entity.get(kind) or {}).get(key) or "").lower().translate(NORDIC_FOLD) for kind in ("forretningsadresse", "postadresse", "beliggenhetsadresse") for key in ("poststed", "kommune")}
+        name_tokens |= {part for place in places for part in re.split(r"[^a-z0-9]+", place) if len(part) >= 3} | PLACE_MAILBOXES
+        site_wide = shared_contacts(pages, section)
+        emails_seen: set[str] = set()
         for page in pages:
             for email in page.emails:
                 local, _, email_domain = email.partition("@")
                 if registered_domain(email_domain) not in {domain, registered_domain(registry_email_domain)}:
                     continue
-                role_like = local in extract.ROLE_MAILBOXES or ("." not in local and local not in person_names and not any(name in local for name in person_names) and len(local) <= 14)
-                if not role_like or emails_done >= 3:
+                if email.lower() in site_wide or not company_mailbox(local, page.text, person_names, name_tokens | {domain_label(domain)}):
+                    continue
+                if staff_contact_page(page.fetched.final_url) and not role_word_mailbox(local):
+                    continue
+                if email.lower() not in emails_seen and len(emails_seen) >= 3:
                     continue
                 ev = ledger.evidence_for(page.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="mailto/text", span=email, method="email_on_verified_site")
-                ledger.claim("contact", "contact.website_email", email, [ev], key=f"contact.website_email.{email}", label="Email on verified website", method="email_on_verified_site", confidence=0.93)
-                emails_done += 1
+                if ledger.claim("contact", "contact.website_email", email, [ev], key=f"contact.website_email.{email}", label="Email on verified website", method="email_on_verified_site", confidence=0.93):
+                    emails_seen.add(email.lower())
         phones_done = 0
         for page in pages:
+            if staff_contact_page(page.fetched.final_url):
+                continue
             for phone in page.phones:
                 if phones_done >= 3:
                     break
+                digits = extract.digits_only(phone)
+                if digits not in registry_phones and digits in site_wide:
+                    continue
                 ev = ledger.evidence_for(page.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="a[href^=tel:]", span=phone, method="tel_link_on_verified_site")
-                if ledger.claim("contact", "contact.website_phone", phone, [ev], key=f"contact.website_phone.{extract.digits_only(phone)}", label="Phone on verified website", method="tel_link_on_verified_site", confidence=0.93):
+                if ledger.claim("contact", "contact.website_phone", phone, [ev], key=f"contact.website_phone.{digits}", label="Phone on verified website", method="tel_link_on_verified_site", confidence=0.93):
                     phones_done += 1
-        if emails_done or phones_done:
+        if emails_seen or phones_done:
             ledger.section("contact", "available", None, sources=[SITE_SOURCE])
 
     def org_object_is_company(self, ctx: CompanyContext, obj: dict[str, Any], own: bool) -> bool:
@@ -1285,7 +1339,7 @@ class WebsiteResearcher:
                             ledger.claim("company_profiles", f"profile.{platform}", cleaned, [ev], key=f"profile.{platform}.{cleaned.lower()}", label=f"{platform.capitalize()} profile declared in website structured data", method="json_ld", confidence=0.95 if reason == "handle_matches_company_name" else 0.9, relationship="company_owned_profile", extra={"match": reason})
                             ledger.section("company_profiles", "available", None, sources=[SITE_SOURCE])
 
-    def _publish_site_facts(self, ctx: CompanyContext, pages: list[Page], home: Page, own: bool = True) -> None:
+    def _publish_site_facts(self, ctx: CompanyContext, pages: list[Page], home: Page, own: bool = True, section: str = "") -> None:
         ledger = ctx.ledger
 
         def evidence(page: Page, locator: str, span: str, method: str) -> str:
@@ -1325,11 +1379,14 @@ class WebsiteResearcher:
         for name, page in offers[:10]:
             ledger.claim("website", "website.offering", name, [evidence(page, "json-ld Service/Product name", name, "json_ld")], key=f"website.offering.{name.lower()[:80]}", label="Product or service listed on verified website", method="json_ld", confidence=0.88)
         phones_seen = {extract.digits_only(str(claim["value"])) for claim in ledger.claims if claim["field"] == "contact.website_phone"}
+        site_wide = shared_contacts(pages, section)
         added = 0
         for page in pages:
+            if staff_contact_page(page.fetched.final_url):
+                continue
             for match in TEXT_PHONE.finditer(page.text):
                 digits = extract.digits_only(match.group(1))
-                if len(digits) != 8 or digits in phones_seen or digits[0] not in "2345679" or added >= 2:
+                if len(digits) != 8 or digits in phones_seen or digits in site_wide or digits[0] not in "2345679" or added >= 2:
                     continue
                 span = re.sub(r"\s+", " ", match.group(0)).strip()
                 ledger.claim("contact", "contact.website_phone", match.group(1).strip(), [evidence(page, "text", span, "phone_label_on_verified_site")], key=f"contact.website_phone.{digits}", label="Phone on verified website", method="phone_label_on_verified_site", confidence=0.9)
