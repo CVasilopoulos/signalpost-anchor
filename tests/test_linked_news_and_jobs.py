@@ -229,3 +229,12 @@ def test_article_on_the_verified_site_may_name_the_company_by_its_public_brand()
     ctx = research("923609016", FJORD_ENTITY, fjord_pages(**{"https://www.fjordvei.no/": home, "https://www.fjordvei.no/aktuelt/ny-rammeavtale": brand_only}))
     assert values(ctx, "identity.public_brand") == ["Fjordvei"]
     assert [item[0] for item in news(ctx)] == ["Ny rammeavtale med kommunen - Fjordvei"]
+
+
+def test_article_on_the_verified_site_may_name_the_company_by_the_long_first_word_of_its_legal_name():
+    entity = {"navn": "KVINNEHELSEKLINIKKEN OSTEOPATI & FYSIOTERAPI AS", "hjemmeside": "www.fjordvei.no", "organisasjonsform": {"kode": "AS"}}
+    home = FJORD_HOME.replace("Fjordvei Drift AS", "Kvinnehelseklinikken Osteopati & Fysioterapi AS")
+    article = FJORD_ARTICLE.replace("<footer>Fjordvei Drift AS</footer>", "<footer>Kvinnehelseklinikken i Gjøvik</footer>").replace(" - Fjordvei Drift", "")
+    ctx = research("923609016", entity, fjord_pages(**{"https://www.fjordvei.no/": home, "https://www.fjordvei.no/aktuelt/ny-rammeavtale": article}))
+    claim = next(claim for claim in ctx.ledger.claims if claim["field"] == "activity.website_news")
+    assert "Kvinnehelseklinikken" in claim["company_named_on_page"]

@@ -255,6 +255,11 @@ def page_names(ctx: CompanyContext, with_brand: bool) -> list[str]:
     brand = ctx.ledger.first_value("identity.public_brand") if with_brand else None
     if isinstance(brand, str) and len(re.sub(r"[^\wæøå]", "", brand)) >= 4:
         names.append(brand)
+    if with_brand:
+        words = tokens(name_without_org_type(ctx.name) or ctx.name)
+        distinct = distinctive_tokens(ctx.name)
+        if words and len(words[0]) >= 10 and words[0] in distinct:
+            names.append(words[0])
     return list(dict.fromkeys(names))
 
 

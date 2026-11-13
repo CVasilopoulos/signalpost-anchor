@@ -109,9 +109,9 @@ def world(state: dict):
                 return httpx.Response(200, json={"id": "p1", "next_id": None, "items": [{"id": "u1", "url": "/api/v1/feedentry/u1", "_feed_entry": {"uuid": "u1", "status": "ACTIVE", "title": "Tømrer", "businessName": "Consto AS avd Tromsø", "sistEndret": "2026-10-10T10:00:00+02:00"}},
                     {"id": "u2", "url": "/api/v1/feedentry/u2", "_feed_entry": {"uuid": "u2", "status": "ACTIVE", "title": "Snekker", "businessName": "CONSTO AS", "sistEndret": "2026-10-10T10:00:00+02:00"}}]})
             if path == "/api/v1/feedentry/u1":
-                return httpx.Response(200, json={"uuid": "u1", "status": "ACTIVE", "ad_content": {"title": "Tømrer", "published": "2026-10-09T09:00:00+02:00", "expires": "2026-11-01T00:00:00+01:00", "link": state.get("u1_link", "https://arbeidsplassen.nav.no/stillinger/stilling/u1"), "employer": {"name": "CONSTO AS AVD TROMSØ", "orgnr": SUBUNIT, "homepage": "https://consto.no"}, "workLocations": [{"city": "TROMSØ"}], "contactList": [{"name": "Private Person", "phone": "99999999"}]}})
+                return httpx.Response(200, json={"uuid": "u1", "status": "ACTIVE", "ad_content": {"title": "Tømrer", "published": "2026-10-09T09:00:00+02:00", "expires": "2026-11-01T00:00:00+01:00", "link": state.get("u1_link", "https://arbeidsplassen.nav.no/stillinger/stilling/u1"), "employer": {"name": "CONSTO AS AVD TROMSØ", "orgnr": SUBUNIT, "homepage": "https://consto.no", "description": state.get("u1_description")}, "workLocations": [{"city": "TROMSØ"}], "contactList": [{"name": "Private Person", "phone": "99999999"}]}})
             if path == "/api/v1/feedentry/u2":
-                return httpx.Response(200, json={"uuid": "u2", "status": "ACTIVE", "ad_content": {"title": "Snekker", "employer": {"name": "CONSTO AS", "orgnr": state.get("u2_orgnr", "111111118")}}})
+                return httpx.Response(200, json={"uuid": "u2", "status": "ACTIVE", "ad_content": {"title": "Snekker", "employer": {"name": "CONSTO AS", "orgnr": state.get("u2_orgnr", "111111118"), "description": state.get("u2_description")}}})
         if host == "nordlysbakeri.no":
             if path == "/robots.txt":
                 return httpx.Response(404)
@@ -431,3 +431,27 @@ def test_first_run_has_nothing_since_a_previous_run_and_lists_recent_dated_items
     assert block["is_first_run"] is True and block["since_previous_run"] == []
     kinds = [item["kind"] for item in block["latest_movements"]]
     assert "recent_article" in kinds
+
+
+def test_employer_description_comes_from_the_same_nav_ad_whatever_order_the_ads_are_checked_in(tmp_path):
+    texts = {"u1_description": "Consto Tromsø bygger skoler, sykehjem og boliger i hele Troms og Finnmark for offentlige og private byggherrer.", "u2_description": "Consto er en entreprenør med kontorer i Nord-Norge og leverer bygg, anlegg og rehabilitering til kunder i hele landsdelen.", "u2_orgnr": ORG}
+    first, _ = run_world(tmp_path, texts, [ORG])
+    descriptions = [c["value"] for c in by_org(first)[ORG]["claims"] if c["field"] == "identity.employer_self_description"]
+    assert descriptions == [texts["u1_description"]]
+
+
+def test_summary_lead_never_mixes_a_revenue_trend_with_a_later_year_that_has_no_revenue():
+    from signalpost_anchor.context import CompanyContext
+    from signalpost_anchor.ledger import Ledger
+    from signalpost_anchor.synthesis import build_synthesis
+    from signalpost_anchor.http import Fetched
+
+    ctx = CompanyContext("930873802", Ledger("930873802"))
+    ctx.entity = {"navn": "TESTBEDRIFT AS"}
+    ctx.entity_status = "active"
+    fetched = Fetched(url="https://data.brreg.no/regnskapsregisteret/regnskap/930873802", final_url="https://data.brreg.no/regnskapsregisteret/regnskap/930873802", status=200, content=b"{}", content_type="application/json", retrieved_at="2026-11-13T10:00:00Z", sha256="0" * 64, elapsed_ms=1)
+    ev = ctx.ledger.evidence_for(fetched, source_name="Regnskapsregisteret", source_class="official_api", licence_key="brreg", locator="$", span="accounts")
+    for field, year, value in (("financials.revenue", "2023", 9_000_000), ("financials.revenue", "2024", 9_200_000), ("financials.annual_result", "2025", -382_000)):
+        ctx.ledger.claim("annual_accounts", field, value, [ev], key=f"{field}.{year}", extra={"fiscal_year": year, "account_scope": "company", "unit": "NOK"})
+    lead = build_synthesis(ctx)["summary_sentences"][0]["text"]
+    assert lead.startswith("No operating revenue is reported for 2025; the annual result was -NOK 382 k (2025)")

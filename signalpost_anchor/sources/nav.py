@@ -208,6 +208,7 @@ async def attach_jobs(index: NavJobIndex, contexts: list[CompanyContext], stop_a
         work.extend((ctx, entry) for entry in matched[:40])
     stats["candidates"] = len(work)
     semaphore = asyncio.Semaphore(4)
+    outcomes: list[tuple[str, str, str, tuple]] = []
 
     async def verify(ctx: CompanyContext, entry: dict[str, Any]) -> None:
         if stop_at and time.monotonic() > stop_at:
@@ -224,15 +225,22 @@ async def attach_jobs(index: NavJobIndex, contexts: list[CompanyContext], stop_a
             return
         employer = ad.get("employer") or {}
         orgnr = re.sub(r"\D", "", str(employer.get("orgnr") or ""))
+        uuid = str(body.get("uuid") or entry["uuid"])
         if orgnr not in ctx.related_organisation_numbers():
             stats["rejected_orgnr_mismatch"] += 1
-            relation = (ctx.group_relatives.get(orgnr) or {}).get("relation")
-            ctx.ledger.withhold("job_employer_not_company", "hiring.job_posting", ad.get("title") or entry.get("title") or "", url=f"https://arbeidsplassen.nav.no/stillinger/stilling/{body.get('uuid') or entry['uuid']}", fetched=fetched, detail=f"employer {employer.get('name')} ({orgnr or 'no number'})" + (f", registered {relation.replace('_', ' ')}" if relation else ""))
+            outcomes.append((ctx.organisation_number, "withhold", uuid, (ctx, entry, fetched, body, ad, employer, orgnr)))
             return
         stats["verified"] += 1
-        publish_job(ctx, fetched, body, ad, employer, orgnr)
+        outcomes.append((ctx.organisation_number, "publish", uuid, (ctx, fetched, body, ad, employer, orgnr)))
 
     await asyncio.gather(*(verify(ctx, entry) for ctx, entry in work))
+    for _, action, uuid, args in sorted(outcomes, key=lambda item: (item[0], item[1], item[2])):
+        if action == "publish":
+            publish_job(*args)
+            continue
+        ctx, entry, fetched, body, ad, employer, orgnr = args
+        relation = (ctx.group_relatives.get(orgnr) or {}).get("relation")
+        ctx.ledger.withhold("job_employer_not_company", "hiring.job_posting", ad.get("title") or entry.get("title") or "", url=f"https://arbeidsplassen.nav.no/stillinger/stilling/{uuid}", fetched=fetched, detail=f"employer {employer.get('name')} ({orgnr or 'no number'})" + (f", registered {relation.replace('_', ' ')}" if relation else ""))
     index.attached = stats["errors"] == 0
     return stats
 

@@ -287,6 +287,8 @@ def _lead_sentence(ctx: CompanyContext, name: str, years: list[str]) -> dict[str
         revenues = [(year, _financial(ctx, "financials.revenue", year)) for year in filed]
         revenues = [(year, claim) for year, claim in revenues if claim is not None]
         latest = filed[-1]
+        if revenues and revenues[-1][0] != latest:
+            revenues = []
         result = _financial(ctx, "financials.annual_result", latest)
         ids = [claim["id"] for _, claim in revenues] + ([result["id"]] if result else [])
         source = f"(Regnskapsregisteret, filed accounts {_years_span([year for year, _ in revenues] or [latest])})"
@@ -295,8 +297,7 @@ def _lead_sentence(ctx: CompanyContext, name: str, years: list[str]) -> dict[str
             prev_year, prev = revenues[-2]
             change = (last["value"] - prev["value"]) / abs(prev["value"]) * 100
             trend = " → ".join(f"{money(claim['value'], claim.get('unit', 'NOK'))} ({year})" for year, claim in revenues)
-            verb = "grew" if change >= 0 else "fell"
-            text = f"Revenue {verb} {abs(change):.0f}% in {last_year}: {trend}"
+            text = f"Revenue was flat in {last_year}: {trend}" if abs(change) < 1 else f"Revenue {'grew' if change > 0 else 'fell'} {abs(change):.0f}% in {last_year}: {trend}"
             if result:
                 text += f", and {latest} closed with a {_result_word(result['value'])} of {money(abs(result['value']), result.get('unit', 'NOK'))}"
             return {"kind": "financials", "text": f"{text} {source}.", "claim_ids": ids}
@@ -310,7 +311,7 @@ def _lead_sentence(ctx: CompanyContext, name: str, years: list[str]) -> dict[str
         results = [(year, claim) for year, claim in results if claim is not None]
         if results:
             trend = " → ".join(f"{money(claim['value'], claim.get('unit', 'NOK'))} ({year})" for year, claim in results)
-            opening = f"Operating revenue was NOK 0 in {revenues[-1][0]}" if revenues else "No operating revenue is reported"
+            opening = f"Operating revenue was NOK 0 in {latest}" if revenues else f"No operating revenue is reported for {latest}"
             return {"kind": "financials", "text": f"{opening}; the annual result was {trend} (Regnskapsregisteret, filed accounts {_years_span([year for year, _ in results])}).", "claim_ids": [claim["id"] for _, claim in results] + [claim["id"] for _, claim in revenues[-1:]]}
     jobs = sorted(_claims(ctx, "hiring.job_posting"), key=lambda claim: str(claim.get("date_posted") or claim.get("as_of") or ""), reverse=True)
     if jobs:
