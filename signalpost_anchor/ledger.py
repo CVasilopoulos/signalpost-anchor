@@ -40,6 +40,8 @@ LICENCES = {
     "wikidata": "CC0 1.0 (Wikidata)",
     "gleif": "CC0 1.0 (GLEIF LEI data)",
     "company_site": "Company-owned public web page; fetched per robots.txt; excerpt quoted as evidence",
+    "recruiting_platform": "Public job posting on a recruiting platform linked from the company's verified website; fetched per robots.txt; excerpt quoted as evidence",
+    "press_release_platform": "Public press release on a press-release platform linked from the company's verified website; fetched per robots.txt; excerpt quoted as evidence",
 }
 
 

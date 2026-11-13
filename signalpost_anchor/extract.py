@@ -475,10 +475,216 @@ def page_published_date(soup: BeautifulSoup, objects: list[dict[str, Any]], url:
             parsed = parse_date(tag["datetime"])
             if parsed:
                 return parsed, f"{container.name} time[datetime]"
+    classed = classed_published_date(soup)
+    if classed:
+        return classed, "element with a publish-date class"
+    body_text = re.sub(r"\s+", " ", (soup.body or soup).get_text(" ", strip=True))[:20000]
+    labelled = labelled_published_date(body_text)
+    if labelled:
+        return labelled[0], labelled[1]
     parsed = url_date(url) if url else None
     if parsed:
         return parsed, "date in URL"
     return None, None
+
+
+MONTHS = {
+    "januar": 1, "january": 1, "jan": 1, "februar": 2, "february": 2, "feb": 2, "mars": 3, "march": 3, "mar": 3, "april": 4, "apr": 4,
+    "mai": 5, "may": 5, "juni": 6, "june": 6, "jun": 6, "juli": 7, "july": 7, "jul": 7, "august": 8, "aug": 8, "september": 9,
+    "sept": 9, "sep": 9, "oktober": 10, "october": 10, "okt": 10, "oct": 10, "november": 11, "nov": 11, "desember": 12,
+    "december": 12, "des": 12, "dec": 12,
+}
+MONTH_WORDS = "|".join(sorted(MONTHS, key=len, reverse=True))
+TEXT_DATE = re.compile(
+    r"(?<![\d.])(?P<d1>\d{1,2})\.\s?(?P<m1>\d{1,2})\.\s?(?P<y1>(?:19|20)\d{2})(?!\d)"
+    r"|(?<![\d\w])(?P<d2>\d{1,2})\.?\s+(?P<m2>" + MONTH_WORDS + r")\.?,?\s+(?P<y2>(?:19|20)\d{2})(?!\d)"
+    r"|(?<![\w])(?P<m3>" + MONTH_WORDS + r")\.?\s+(?P<d3>\d{1,2})(?:st|nd|rd|th)?,?\s+(?P<y3>(?:19|20)\d{2})(?!\d)"
+    r"|(?<![\d\-])(?P<y4>(?:19|20)\d{2})-(?P<m4>\d{2})-(?P<d4>\d{2})(?![\d])",
+    re.I,
+)
+MODIFIED_LABEL = re.compile(r"(oppdatert|endret|updated|modified|revidert|revised|frist|deadline|innen|until|til og med|t\.o\.m\.)\W{0,3}(den\s+|on\s+|:\s*)?$", re.I)
+PUBLISHED_LABEL = re.compile(r"(?<![\wæøå])(publisert|publiseret|publisering|publiseringsdato|published|publication date|posted|postet|skrevet|lagt ut|dato publisert)(\s+(den|on|kl\.?))?\s*:?\s*$", re.I)
+TIMESTAMP_AFTER = re.compile(r"^,?\s+(kl\.?\s*)?\d{1,2}[:.]\d{2}(:\d{2})?\s*(CET|CEST|UTC|GMT)\b", re.I)
+
+
+def text_dates(text: str) -> list[tuple[str, int, int]]:
+    found = []
+    for match in TEXT_DATE.finditer(text or ""):
+        groups = match.groupdict()
+        try:
+            if groups["d1"]:
+                day, month, year = int(groups["d1"]), int(groups["m1"]), int(groups["y1"])
+            elif groups["d2"]:
+                day, month, year = int(groups["d2"]), MONTHS[groups["m2"].lower()], int(groups["y2"])
+            elif groups["d3"]:
+                day, month, year = int(groups["d3"]), MONTHS[groups["m3"].lower()], int(groups["y3"])
+            else:
+                day, month, year = int(groups["d4"]), int(groups["m4"]), int(groups["y4"])
+            value = datetime(year, month, day)
+        except (ValueError, KeyError):
+            continue
+        if value.year < 1990 or value > datetime.now() + timedelta(days=1):
+            continue
+        found.append((value.date().isoformat(), match.start(), match.end()))
+    return found
+
+
+DATE_CLASS_HINT = re.compile(r"(publish|posted|post-date|post_date|post__date|postdate|entry-date|article-date|article__date|news-date|news__date|blog-date|blog__date|date-published|pubdate|dato)", re.I)
+NOT_PUBLISH_CLASS = re.compile(r"(modif|updat|oppdat|endret|event|arrang|deadline|frist|start|end-date|expir)", re.I)
+SHORT_YEAR_DATE = re.compile(r"(?<![\d.])(\d{1,2})\.(\d{1,2})\.(\d{2})(?![\d.])")
+
+
+def classed_published_date(soup: BeautifulSoup) -> str | None:
+    for tag in soup.find_all(["div", "span", "p", "small", "li", "time"], class_=True, limit=4000):
+        classes = " ".join(tag.get("class") or [])
+        if not DATE_CLASS_HINT.search(classes) or NOT_PUBLISH_CLASS.search(classes):
+            continue
+        text = re.sub(r"\s+", " ", tag.get_text(" ", strip=True))
+        if not text or len(text) > 60:
+            continue
+        found = {value for value, _, _ in text_dates(text)}
+        if not found:
+            for match in SHORT_YEAR_DATE.finditer(text):
+                try:
+                    value = datetime(2000 + int(match.group(3)), int(match.group(2)), int(match.group(1)))
+                except ValueError:
+                    continue
+                if value <= datetime.now() + timedelta(days=1):
+                    found.add(value.date().isoformat())
+        if len(found) == 1:
+            return next(iter(found))
+    return None
+
+
+def labelled_published_date(text: str) -> tuple[str, str] | None:
+    for value, start, end in text_dates(text):
+        before = text[max(0, start - 40):start]
+        if MODIFIED_LABEL.search(before):
+            continue
+        if PUBLISHED_LABEL.search(before):
+            return value, "text 'published' label"
+        if start < 1500 and TIMESTAMP_AFTER.match(text[end:end + 30]):
+            return value, "text timestamp"
+    return None
+
+
+def link_dates(soup: BeautifulSoup, base_url: str, limit: int = 400) -> dict[str, tuple[str, str]]:
+    result: dict[str, tuple[str, str]] = {}
+    for anchor in soup.find_all("a", href=True, limit=limit):
+        href = anchor["href"].strip()
+        if href.startswith(("mailto:", "tel:", "javascript:", "#")):
+            continue
+        url = urljoin(base_url, href).split("#")[0]
+        if url in result or not url.startswith(("http://", "https://")):
+            continue
+        node = anchor
+        for _ in range(4):
+            node = node.parent
+            if node is None or node.name in ("body", "html", "[document]", "nav", "header", "footer"):
+                break
+            hrefs = {urljoin(base_url, item["href"].strip()).split("#")[0] for item in node.find_all("a", href=True, limit=6)}
+            if len(hrefs) > 2:
+                break
+            text = re.sub(r"\s+", " ", node.get_text(" ", strip=True))
+            if len(text) > 600:
+                break
+            dates: dict[str, str] = {}
+            for tag in node.find_all("time", attrs={"datetime": True}):
+                parsed = parse_date(tag["datetime"])
+                if parsed and parsed <= (datetime.now() + timedelta(days=1)).date().isoformat():
+                    dates.setdefault(parsed, text)
+            for value, start, end in text_dates(text):
+                if not MODIFIED_LABEL.search(text[max(0, start - 40):start]):
+                    dates.setdefault(value, text)
+            if len(dates) == 1:
+                value, snippet = next(iter(dates.items()))
+                result[url] = (value, snippet[:300])
+                break
+            if len(dates) > 1:
+                break
+    return result
+
+
+JOB_DEADLINE_LABEL = re.compile(r"(?<![\wæøå])(søknadsfrist|soknadsfrist|application\s+(?:due|deadline)|apply\s+by|sista\s+ansökningsdag|ansøgningsfrist|frist\s+for\s+søknad)\s*:?\s*", re.I)
+JOB_CLOSED = re.compile(r"(stillingen er (besatt|ikke lenger ledig|ikke ledig)|søknadsfristen (er|har) (utløpt|gått ut)|annonsen er utløpt|annonsen er ikke lenger aktiv|stillingen er ikke lenger tilgjengelig|no longer (accepting applications|available|open)|position has been filled|this (job|position) (has expired|is closed|is no longer)|job is no longer available)", re.I)
+JOBBNORGE_FIELDS = re.compile(r"Stillingstittel:\s*(?P<title>.+?),\s*Arbeidsgiver:\s*(?P<employer>.+?),\s*Søknadsfrist:\s*(?P<deadline>.+)$", re.I)
+
+
+def job_posting_fields(objects: list[dict[str, Any]], description: str | None, text: str, title: str | None, url: str = "") -> dict[str, Any] | None:
+    postings = [item for item in objects if "JobPosting" in types_of(item) and isinstance(item.get("title"), str) and item["title"].strip()]
+    own = [item for item in postings if _same_page(_object_url(item), url)] or postings
+    if len(own) == 1:
+        item = own[0]
+        organisation = item.get("hiringOrganization")
+        employer = organisation.get("name") if isinstance(organisation, dict) else organisation if isinstance(organisation, str) else None
+        identifiers = " ".join(str(organisation.get(key, "")) for key in ("identifier", "taxID", "vatID", "leiCode")) if isinstance(organisation, dict) else ""
+        return {"title": item["title"].strip(), "employer": employer.strip() if isinstance(employer, str) else None, "employer_identifiers": identifiers, "date_posted": parse_date(item.get("datePosted")), "deadline": parse_date(item.get("validThrough")), "signal": "json-ld JobPosting", "closed": bool(JOB_CLOSED.search(text or "")), "countries": job_countries(item), "localities": job_localities(item)}
+    if len(own) > 1:
+        return None
+    match = JOBBNORGE_FIELDS.search(description or "")
+    if match:
+        dates = _future_tolerant_dates(match.group("deadline"))
+        return {"title": match.group("title").strip(), "employer": match.group("employer").strip(), "employer_identifiers": "", "date_posted": None, "deadline": dates[0][0] if dates else None, "deadline_text": match.group("deadline").strip(), "signal": "meta description (Stillingstittel, Arbeidsgiver, Søknadsfrist)", "closed": bool(JOB_CLOSED.search(text or ""))}
+    label = JOB_DEADLINE_LABEL.search(text or "")
+    if label and title and len(JOB_DEADLINE_LABEL.findall(text)) == 1:
+        window = text[label.end():label.end() + 40]
+        deadline = None
+        dates = [item for item in _future_tolerant_dates(window) if item[1] < 6]
+        if dates:
+            deadline = dates[0][0]
+        elif not re.match(r"(snarest|fortløpende|asap|løpende|as soon as possible|snarast)", window.strip(), re.I):
+            return None
+        return {"title": title.strip(), "employer": None, "employer_identifiers": "", "date_posted": None, "deadline": deadline, "deadline_text": text[label.start():label.end() + 30].strip(), "signal": "deadline label in page text", "closed": bool(JOB_CLOSED.search(text or ""))}
+    return None
+
+
+NORWAY_CODES = {"NO", "NOR", "NORWAY", "NORGE", "NOREG"}
+
+
+def _job_addresses(item: dict[str, Any]) -> list[dict[str, Any]]:
+    places = item.get("jobLocation")
+    places = places if isinstance(places, list) else [places] if isinstance(places, dict) else []
+    addresses = []
+    for place in places:
+        if isinstance(place, dict):
+            address = place.get("address")
+            if isinstance(address, dict):
+                addresses.append(address)
+    return addresses
+
+
+def job_countries(item: dict[str, Any]) -> list[str]:
+    found = []
+    for address in _job_addresses(item):
+        country = address.get("addressCountry")
+        if isinstance(country, dict):
+            country = country.get("name") or country.get("identifier")
+        if isinstance(country, str) and country.strip():
+            found.append(country.strip().upper())
+    return sorted(set(found))
+
+
+def job_localities(item: dict[str, Any]) -> list[str]:
+    return sorted({address["addressLocality"].strip() for address in _job_addresses(item) if isinstance(address.get("addressLocality"), str) and address["addressLocality"].strip()})
+
+
+def _future_tolerant_dates(text: str) -> list[tuple[str, int, int]]:
+    found = []
+    for match in TEXT_DATE.finditer(text or ""):
+        groups = match.groupdict()
+        try:
+            if groups["d1"]:
+                value = datetime(int(groups["y1"]), int(groups["m1"]), int(groups["d1"]))
+            elif groups["d2"]:
+                value = datetime(int(groups["y2"]), MONTHS[groups["m2"].lower()], int(groups["d2"]))
+            elif groups["d3"]:
+                value = datetime(int(groups["y3"]), MONTHS[groups["m3"].lower()], int(groups["d3"]))
+            else:
+                value = datetime(int(groups["y4"]), int(groups["m4"]), int(groups["d4"]))
+        except (ValueError, KeyError):
+            continue
+        found.append((value.date().isoformat(), match.start(), match.end()))
+    return found
 
 
 PRODUCT_TYPES = {"Product", "ProductGroup", "ProductModel", "IndividualProduct", "SomeProducts", "Offer", "AggregateOffer", "Car", "Vehicle", "Motorcycle"}

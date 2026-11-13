@@ -280,7 +280,7 @@ def test_group_structure_is_labelled_parent_and_subsidiary(tmp_path):
     assert claims["group.parent"]["relationship"] == "parent"
     assert claims["group.subsidiary"]["subsidiary_organisation_number"] == "917078297"
     assert claims["group.subsidiary"]["relationship"] == "subsidiary"
-    assert "corporate group" in by_org(envelopes)[ORG]["synthesis"]["paragraphs"][0]["text"]
+    assert "corporate group" in next(p for p in by_org(envelopes)[ORG]["synthesis"]["paragraphs"] if p["topic"] == "what_it_does")["text"]
 
 
 def test_derived_domain_showing_the_parents_number_is_labelled_not_collapsed(tmp_path):
@@ -342,15 +342,32 @@ def test_synthesis_gives_key_points_and_lists_the_sources_behind_each_paragraph(
     envelopes, _ = run_world(tmp_path, {}, [ORG])
     synthesis = by_org(envelopes)[ORG]["synthesis"]
     topics = [paragraph["topic"] for paragraph in synthesis["paragraphs"]]
-    assert topics[:2] == ["what_it_does", "key_points"]
-    glance = synthesis["paragraphs"][1]
+    assert topics[:3] == ["summary", "what_it_does", "key_points"]
+    glance = synthesis["paragraphs"][2]
     assert glance["text"].startswith("At a glance: registered 2010")
     assert "own website https://consto.no/" in glance["text"]
     claims = {claim["id"]: claim for claim in by_org(envelopes)[ORG]["claims"]}
     assert glance["claim_ids"] and all(claim_id in claims for claim_id in glance["claim_ids"])
     urls = {source["url"] for source in glance["sources"]}
     assert any("data.brreg.no" in url for url in urls) and any(url.startswith("https://consto.no") for url in urls)
-    assert "At a glance" in synthesis["summary"]
+    assert not synthesis["summary"].startswith("CONSTO")
+
+
+def test_summary_leads_with_a_sourced_buyer_fact_then_what_changed_then_unknowns(tmp_path):
+    envelopes, _ = run_world(tmp_path, {}, [ORG])
+    synthesis = by_org(envelopes)[ORG]["synthesis"]
+    sentences = synthesis["summary_sentences"]
+    assert [item["kind"] for item in sentences][0] == "financials"
+    assert sentences[0]["text"].startswith("Revenue ") and "(Regnskapsregisteret, filed accounts" in sentences[0]["text"]
+    kinds = [item["kind"] for item in sentences]
+    assert kinds.index("changed") > kinds.index("financials")
+    assert "unknown" not in kinds or kinds.index("unknown") == len(kinds) - 1
+    claims = {claim["id"]: claim for claim in by_org(envelopes)[ORG]["claims"]}
+    for item in sentences:
+        assert item["text"].rstrip(".").endswith(")")
+        assert all(claim_id in claims for claim_id in item["claim_ids"])
+    assert sentences[0]["sources"] and all("data.brreg.no" in source["url"] for source in sentences[0]["sources"])
+    assert synthesis["paragraphs"][0]["topic"] == "summary" and synthesis["paragraphs"][0]["text"] == synthesis["summary"]
 
 
 def test_synthesis_says_what_changed_on_a_first_run_and_on_a_refresh_without_changes(tmp_path):

@@ -174,6 +174,10 @@ async def attach_jobs(index: NavJobIndex, contexts: list[CompanyContext], stop_a
             continue
         keys = {normalise_employer(name) for name in ctx.names()}
         keys = {key for key in keys if key}
+        brand = ctx.ledger.first_value("identity.public_brand")
+        brand_key = normalise_employer(brand) if isinstance(brand, str) else ""
+        if len(brand_key.replace(" ", "")) >= 4:
+            keys.add(brand_key)
         seen: set[str] = set()
         matched: list[dict[str, Any]] = []
         for key in keys:

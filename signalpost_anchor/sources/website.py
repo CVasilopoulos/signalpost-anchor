@@ -126,6 +126,30 @@ FOREIGN_TLDS = {"se", "dk", "fi", "de", "uk", "nl", "pl", "ee", "lt", "lv", "is"
 GROUP_TEXT_FORMS = r"(?:AB|ApS|Oy|Oyj|GmbH|Sverige|Sweden|Danmark|Denmark|Finland|Suomi)"
 PLACEHOLDER_TITLE = re.compile(r"^(hello world!?|hei verden!?|sample (page|post)|eksempelside|eksempelinnlegg|blog post title.*|lorem ipsum.*|vacancy \d+|test|testinnlegg|test post|uncategori[sz]ed|ukategorisert|untitled|uten tittel|new post|nytt innlegg)$", re.I)
 NAV_SEARCH = re.compile(r"arbeidsplassen\.nav\.no/stillinger/?(\?|$)", re.I)
+ATS_POSTINGS = (
+    ("Teamtailor", re.compile(r"^https://[a-z0-9\-]+\.teamtailor\.com/(?:[a-z]{2}(?:-[a-z]{2})?/)?jobs/\d+[a-z0-9\-]*/?$", re.I)),
+    ("Recman", re.compile(r"^https://[a-z0-9\-]+\.recman\.page/job/\d+[a-z0-9\-/]*$", re.I)),
+    ("Jobylon", re.compile(r"^https://emp\.jobylon\.com/jobs/\d+[a-z0-9\-]*/?$", re.I)),
+    ("Jobbnorge", re.compile(r"^https://(?:www\.)?jobbnorge\.no/(?:en/)?(?:ledige-stillinger|available-jobs)/stilling/\d+[^?#]*$", re.I)),
+    ("HR-manager", re.compile(r"^https://candidate\.hr-manager\.net/ApplicationInit\.aspx\?(?![^#]*SkipAdvertisement=True)[^#]+$", re.I)),
+    ("Varbi", re.compile(r"^https://[a-z0-9\-]+\.varbi\.com/(?:[a-z]{2}/)?what:job/jobID:\d+/?$", re.I)),
+)
+ATS_LISTINGS = (
+    ("Teamtailor", re.compile(r"^https://[a-z0-9\-]+\.teamtailor\.com/(?:[a-z]{2}(?:-[a-z]{2})?/)?(?:jobs/?)?$", re.I)),
+)
+PRESS_RELEASES = (
+    ("Cision News", re.compile(r"^https://news\.cision\.com/(?:[a-z]{2}/)?[a-z0-9\-]+/r/[^?#]+$", re.I)),
+    ("NTB Kommunikasjon", re.compile(r"^https://kommunikasjon\.ntb\.no/pressemelding/\d+/[^#]+$", re.I)),
+)
+POSTING_SEGMENTS = {"stilling", "stillinger", "ledige-stillinger", "ledig-stilling", "jobb", "jobber", "jobs", "job", "karriere", "career", "careers", "vacancies", "vacancy", "jobb-hos-oss", "jobbe-hos-oss", "stillingsannonser", "ledigestillinger"}
+APPLY_TEXT = re.compile(r"(?<![\wæøå])(vi søker|spørsmål om stillingen|søk på stillingen|søk stillingen|send (din |oss en )?søknad|søknad (sendes|merkes)|søk her|søk nå|apply (now|here|for this)|how to apply|we are looking for|we're looking for)(?![\wæøå])", re.I)
+OPEN_APPLICATION = re.compile(r"(åpen søknad|apen soknad|open application|generell søknad|spontansøknad|talentbank|talent pool|ledige stillinger|karriere|jobb hos oss)", re.I)
+POSTING_PARENTS = {"ledig-stilling", "ledige-stillinger", "ledigestillinger", "ledige-jobber", "stilling", "stillinger", "stillingsannonser", "jobb", "jobber", "jobs", "job", "vacancies", "vacancy"}
+POSTING_OPEN_LIMIT = 6
+POSTING_CHECK_SECONDS = 12.0
+POSTING_MAX_AGE_DAYS = 365
+LISTING_OPEN_LIMIT = 8
+PRESS_OPEN_LIMIT = 3
 TITLE_SPLIT = re.compile(r"\s+[|–—\-·:»/]\s+|^\s*[|–—\-·:»/]+\s*|\s*[|–—\-·:»/]+\s*$")
 
 
@@ -178,6 +202,78 @@ def company_mailbox(local: str, page_text: str, person_names: set[str], company_
     return len(parts) == 1 and len(local) <= 14 and not re.search(rf"\b{re.escape(local.capitalize())}(?:[\s\-]+[A-Z][a-z]+)+\b", folded)
 
 
+def platform_of(url: str, table: tuple) -> str | None:
+    return next((name for name, pattern in table if pattern.match(url or "")), None)
+
+
+def own_posting_link(url: str, domain: str, career_paths: list[str]) -> bool:
+    parts = urlsplit(url)
+    if registered_domain(parts.hostname or "") != domain or parts.query:
+        return False
+    segments = [unquote(segment).lower() for segment in parts.path.split("/") if segment]
+    while segments and LANGUAGE_SEGMENT.match(segments[0]) and len(segments) > 1:
+        segments = segments[1:]
+    if len(segments) < 2:
+        return False
+    last = re.sub(r"\.(html?|php|aspx?)$", "", segments[-1])
+    if last in POSTING_SEGMENTS or last in CAREER_SEGMENTS or last in SECTION_SEGMENTS or last in LISTING_SEGMENTS or INDEX_SEGMENT.match(last) or re.fullmatch(r"\d{1,3}|page\d*|side\d*", last):
+        return False
+    path = parts.path.rstrip("/")
+    if any(base and base != "/" and path.startswith(base.rstrip("/") + "/") for base in career_paths):
+        return True
+    return any(segment in POSTING_SEGMENTS for segment in segments[:-1])
+
+
+NTB_PUBLISHER = re.compile(r"\d{1,2}:\d{2}(?::\d{2})?\s*(?:CET|CEST)\s*\|\s*(?P<publisher>[^|]{2,80}?)\s*\|\s*Pressemelding", re.I)
+
+
+def press_publisher(platform: str, url: str, page: Any) -> str | None:
+    if platform == "Cision News":
+        match = re.match(r"^https://news\.cision\.com/(?:[a-z]{2}/)?([a-z0-9\-]+)/r/", url, re.I)
+        return match.group(1).replace("-", " ") if match else None
+    if platform == "NTB Kommunikasjon":
+        match = NTB_PUBLISHER.search(page.text[:1500])
+        return match.group("publisher").strip() if match else None
+    return None
+
+
+def employer_is_company(ctx: CompanyContext, employer: str | None, identifiers: str = "") -> bool | None:
+    numbers = find_orgnrs(identifiers or "")
+    if numbers & ctx.related_organisation_numbers():
+        return True
+    if numbers:
+        return False
+    if not employer or not employer.strip():
+        return None
+    core = core_name(employer)
+    return bool(core) and any(core == core_name(name) for name in ctx.own_names())
+
+
+def page_names(ctx: CompanyContext, with_brand: bool) -> list[str]:
+    names = list(ctx.own_names())
+    names += [trimmed for name in ctx.own_names() if (trimmed := name_without_org_type(name))]
+    brand = ctx.ledger.first_value("identity.public_brand") if with_brand else None
+    if isinstance(brand, str) and len(re.sub(r"[^\wæøå]", "", brand)) >= 4:
+        names.append(brand)
+    return list(dict.fromkeys(names))
+
+
+def company_named_on(ctx: CompanyContext, page: Any, head_only: bool = False, with_brand: bool = False) -> str | None:
+    text = page.text[:600] if head_only else page.text
+    found = page.orgnrs & ctx.related_organisation_numbers()
+    if found and not head_only:
+        number = sorted(found)[0]
+        return orgnr_context(page.text, number) or page.orgnr_links.get(number) or number
+    for name in page_names(ctx, with_brand and not head_only):
+        if len(core_name(name).replace(" ", "")) < 4:
+            continue
+        span = name_span(name, page.title or "") if head_only else None
+        span = span or name_span(name, text) or name_span(name, page.title or "")
+        if span:
+            return span
+    return None
+
+
 def staff_contact_page(url: str) -> bool:
     path = urlsplit(url).path
     return bool(STRICT_CAREER_PATH.search(path) or extract.NEWS_HINTS.search(path))
@@ -218,6 +314,8 @@ class Page:
     article: dict[str, Any] = field(default_factory=dict)
     parking_markup: bool = False
     challenge: bool = False
+    link_dates: dict[str, tuple[str, str]] = field(default_factory=dict)
+    job: dict[str, Any] | None = None
 
 
 def parse_page(fetched: Fetched) -> Page:
@@ -239,6 +337,7 @@ def parse_page(fetched: Fetched) -> Page:
     page.social_details = extract.social_link_details(soup, fetched.final_url)
     page.socials = {platform: [item["url"] for item in items] for platform, items in page.social_details.items()}
     page.links = extract.links(soup, fetched.final_url)
+    page.link_dates = extract.link_dates(soup, fetched.final_url)
     page.phones = extract.tel_links(soup)
     page.published, page.published_source = extract.page_published_date(soup, page.objects, fetched.final_url)
     page.is_product = extract.is_product_page(soup, page.objects)
@@ -256,6 +355,7 @@ def parse_page(fetched: Fetched) -> Page:
                 if valid_orgnr(number):
                     page.orgnrs.add(number)
                     page.orgnr_links.setdefault(number, url)
+    page.job = extract.job_posting_fields(page.objects, page.description, text, page.title, fetched.final_url)
     page.article = extract.article_signals(soup, page.objects, fetched.final_url)
     return page
 
@@ -456,7 +556,12 @@ def news_title_rejection(title: str, labels: set[str]) -> str | None:
     return None
 
 
+SALE_PHRASES = re.compile(r"(?<![\wæøå])(tilbud på|på tilbud|kampanjepris|\d+\s?%\s?(rabatt|avslag|off)|black[\s\-]?(friday|week)|cyber[\s\-]?monday)(?![\wæøå])", re.I)
+
+
 def sale_title(title: str) -> bool:
+    if SALE_PHRASES.search(title or ""):
+        return True
     match = SALE_WORDS.search(title or "")
     if not match:
         return False
@@ -560,6 +665,7 @@ class WebsiteResearcher:
         allowed, reason = await self.robots.allowed(url)
         if not allowed:
             return None, reason
+        await self.robots.wait_turn(url, deadline)
         fetched = await self.fetcher.get(url, max_bytes=2_500_000, retries=1, timeout=10)
         if fetched.error:
             return None, fetched.error
@@ -1071,6 +1177,8 @@ class WebsiteResearcher:
         self._publish_hiring(ctx, source_pages, domain)
         self._publish_site_facts(ctx, source_pages, home, own, section)
         await self._publish_activity(ctx, source_pages, domain, deadline, home, allow_feeds=own, brand=brand[0] if brand else None)
+        if own:
+            await self._publish_postings(ctx, source_pages, home, domain, deadline, group)
         ledger.section("website", "available", f"Verified via {assessment['method'].replace('_', ' ')}" + ("" if own else f"; the site is shared with other organisations ({scope.get('reason')}), so profiles, contacts, news and jobs are read only from pages that show this company's organisation number or exact legal name"), sources=[SITE_SOURCE], checked_at=home.fetched.retrieved_at)
 
     async def _extra_pages(self, ctx: CompanyContext, home: Page, pages: list[Page], deadline: float) -> list[Page]:
@@ -1489,6 +1597,143 @@ class WebsiteResearcher:
                 ev = ledger.evidence_for(page.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="json-ld JobPosting", span=title, method="json_ld")
                 ledger.claim("hiring", "hiring.job_posting", title.strip()[:200], [ev], key=f"hiring.website_job.{title.strip().lower()[:80]}", label="Job posting on verified website", method="json_ld", as_of=posted, confidence=0.9, extra={"source_system": "company_website", "date_posted": posted, "valid_through": valid, "url": ad_url, "hiring_organization": organisation_name})
 
+    def _posting_links(self, pages: list[Page], home: Page, domain: str) -> tuple[list[tuple[str, str, Page, str | None]], list[tuple[str, Page, str | None]]]:
+        career_pages = [page for page in pages if page is not home and STRICT_CAREER_PATH.search(urlsplit(page.fetched.final_url).path)]
+        career_paths = [urlsplit(page.fetched.final_url).path for page in career_pages]
+        postings: dict[str, tuple[str, str, Page, str | None]] = {}
+        listings: dict[str, tuple[str, Page, str | None]] = {}
+        home_host = urlsplit(home.fetched.final_url).hostname or ""
+        for page in career_pages + [page for page in pages if page not in career_pages]:
+            for url, text in page.links:
+                clean = url.split("#")[0]
+                platform = platform_of(clean, ATS_POSTINGS)
+                if platform:
+                    postings.setdefault(clean, (clean, text, page, platform))
+                    continue
+                if own_posting_link(clean, domain, career_paths):
+                    postings.setdefault(clean, (clean, text, page, None))
+                    continue
+                listing = platform_of(clean, ATS_LISTINGS)
+                host = urlsplit(clean).hostname or ""
+                hinted = extract.CAREER_HINTS.search(text) or extract.CAREER_HINTS.search(urlsplit(clean).path) or extract.CAREER_HINTS.search(host.split(".")[0])
+                if listing and hinted:
+                    listings.setdefault(clean, (clean, page, listing))
+                elif hinted and host != home_host and registered_domain(host) == domain and not urlsplit(clean).path.strip("/"):
+                    listings.setdefault(clean, (clean, page, None))
+        return list(postings.values()), list(listings.values())
+
+    def _linked_job_description(self, page: Page, found_on: Page, home: Page, domain: str) -> dict[str, Any] | None:
+        listing_path = urlsplit(found_on.fetched.final_url).path.rstrip("/")
+        path = urlsplit(page.fetched.final_url).path.rstrip("/")
+        segments = [unquote(segment).lower() for segment in path.split("/") if segment]
+        under_careers = found_on is not home and bool(STRICT_CAREER_PATH.search(listing_path)) and path.startswith(listing_path + "/")
+        if not (under_careers or (len(segments) >= 2 and segments[-2] in POSTING_PARENTS)):
+            return None
+        title = clean_title(page.title or "", self._site_labels(home, None, domain))
+        if not title or OPEN_APPLICATION.search(title) or not APPLY_TEXT.search(page.text) or (page.article or {}).get("prose_words", 0) < MIN_ARTICLE_WORDS:
+            return None
+        return {"title": title, "employer": None, "employer_identifiers": "", "date_posted": page.published, "deadline": None, "signal": "job description linked from the careers listing" if under_careers else "job description in the site's vacancies section", "closed": bool(extract.JOB_CLOSED.search(page.text))}
+
+    async def _publish_postings(self, ctx: CompanyContext, pages: list[Page], home: Page, domain: str, deadline: float, group: str | None = None) -> None:
+        ledger = ctx.ledger
+        check_deadline = max(deadline, time.monotonic() + POSTING_CHECK_SECONDS)
+        if ctx.deadline:
+            check_deadline = min(check_deadline, ctx.deadline)
+        postings, listings = self._posting_links(pages, home, domain)
+        if listings and len(postings) < POSTING_OPEN_LIMIT and time.monotonic() < check_deadline:
+            url, found_on, platform = listings[0]
+            listing_page, _ = await self.fetch_page(url, check_deadline)
+            if listing_page is not None:
+                listing_host = urlsplit(listing_page.fetched.final_url).hostname or ""
+                seen = {item[0] for item in postings}
+                for link, text in listing_page.links:
+                    clean = link.split("#")[0]
+                    if clean in seen:
+                        continue
+                    found = platform_of(clean, ATS_POSTINGS)
+                    if found or (platform is None and urlsplit(clean).hostname == listing_host and own_posting_link(clean, domain, [urlsplit(listing_page.fetched.final_url).path])):
+                        seen.add(clean)
+                        postings.append((clean, text, listing_page, found))
+        if not postings:
+            return
+        existing = {str(claim.get("url") or "") for claim in ledger.claims if claim["field"] == "hiring.job_posting"}
+        queue = [item for item in postings if item[0] not in existing][:POSTING_OPEN_LIMIT]
+        for url, text, found_on, platform in postings[POSTING_OPEN_LIMIT:]:
+            ledger.withhold("job_over_check_limit", "hiring.job_posting", text or url, url=url, fetched=found_on.fetched, detail=f"only the first {POSTING_OPEN_LIMIT} linked postings are opened and checked")
+        opened: dict[str, tuple[Page | None, str | None]] = {}
+        semaphore = asyncio.Semaphore(3)
+
+        async def load(url: str) -> None:
+            async with semaphore:
+                opened[url] = await self.fetch_page(url, check_deadline)
+
+        await asyncio.gather(*(load(item[0]) for item in queue))
+        today = date.today().isoformat()
+        oldest = (date.today() - timedelta(days=POSTING_MAX_AGE_DAYS)).isoformat()
+        published: set[str] = set()
+        titles = {str(claim.get("value") or "").strip().lower() for claim in ledger.claims if claim["field"] == "hiring.job_posting" and claim.get("source_system") != "NAV arbeidsplassen"}
+        for url, text, found_on, platform in queue:
+            page, error = opened.get(url, (None, "not opened"))
+            if page is None:
+                ledger.withhold("job_page_not_checked", "hiring.job_posting", text or url, url=url, fetched=found_on.fetched, detail=error or "posting page could not be opened")
+                continue
+            job = page.job
+            if not job and platform is None:
+                job = self._linked_job_description(page, found_on, home, domain)
+            if not job or (platform is None and job["signal"] == "deadline label in page text" and not STRICT_CAREER_PATH.search(urlsplit(page.fetched.final_url).path)):
+                ledger.withhold("job_page_not_a_posting", "hiring.job_posting", page.title or text or url, url=url, fetched=page.fetched, detail="no JobPosting markup, employer fields or application deadline on the page")
+                continue
+            title = job["title"]
+            countries = job.get("countries") or []
+            if countries and not set(countries) & extract.NORWAY_CODES:
+                ledger.withhold("job_location_outside_norway", "hiring.job_posting", title, url=url, fetched=page.fetched, detail=f"job location: {', '.join(job.get('localities') or [])} ({', '.join(countries)})")
+                continue
+            strict = bool(group) or (not countries and (platform is not None or (urlsplit(page.fetched.final_url).hostname or "") != (urlsplit(home.fetched.final_url).hostname or "")))
+            match = employer_is_company(ctx, job.get("employer"), job.get("employer_identifiers") or "")
+            if match is False:
+                ledger.withhold("job_hiring_organization_not_company", "hiring.job_posting", title, url=url, fetched=page.fetched, detail=f"employer on the posting: {job.get('employer') or 'another organisation number'}")
+                continue
+            proof = None
+            if match:
+                proof = job.get("employer")
+            if platform is None or not proof or strict:
+                named = company_named_on(ctx, page, with_brand=platform is None and not strict)
+                if (platform is not None or strict) and named and not (page.orgnrs & ctx.related_organisation_numbers()):
+                    named = next((span for name in ctx.own_names() if (span := legal_name_span(name, page.text))), None)
+                proof = named if strict else named or (proof if platform is None else None)
+            if not proof:
+                ledger.withhold("job_posting_does_not_name_company", "hiring.job_posting", title, url=url, fetched=page.fetched, detail="the posting page shows neither the company's name nor its organisation number")
+                continue
+            if job.get("closed"):
+                ledger.withhold("job_posting_closed", "hiring.job_posting", title, url=url, fetched=page.fetched, detail="the page says the position is filled or the deadline has passed")
+                continue
+            deadline_value = job.get("deadline")
+            posted = job.get("date_posted")
+            if deadline_value and deadline_value < today:
+                ledger.withhold("job_posting_expired", "hiring.job_posting", title, url=url, fetched=page.fetched, detail=f"application deadline {deadline_value}")
+                continue
+            if not deadline_value and posted and posted < oldest:
+                ledger.withhold("job_posting_not_shown_open", "hiring.job_posting", title, url=url, fetched=page.fetched, detail=f"posted {posted}, no application deadline")
+                continue
+            final = page.fetched.final_url.split("#")[0]
+            if final in published or final in existing or title.strip().lower() in titles:
+                continue
+            published.add(final)
+            titles.add(title.strip().lower())
+            source_name = platform or SITE_SOURCE
+            source_class = "recruiting_platform" if platform else "company_owned"
+            licence = "recruiting_platform" if platform else "company_site"
+            span_bits = [title, job.get("employer"), job.get("deadline_text") or (f"valid through {deadline_value}" if deadline_value else None), f"posted {posted}" if posted else None]
+            evidence = [
+                ledger.evidence_for(page.fetched, source_name=source_name, source_class=source_class, licence_key=licence, locator=job["signal"], span=" — ".join(bit for bit in span_bits if bit), method="job_posting_page"),
+                ledger.evidence_for(page.fetched, source_name=source_name, source_class=source_class, licence_key=licence, locator="text", span=proof, method="company_named_on_posting"),
+                ledger.evidence_for(found_on.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="link on careers page" if found_on is not home else "link on homepage", span=text or final, method="link_from_verified_site"),
+            ]
+            label = f"Open job posting on {platform}, linked from the verified website" if platform else "Open job posting on the verified website"
+            ledger.claim("hiring", "hiring.job_posting", title[:200], evidence, key=f"hiring.linked_job.{extract.clean_url(final)}", label=label, method="linked_job_posting", as_of=posted, confidence=0.9, extra={"source_system": platform or "company_website", "url": final, "date_posted": posted, "valid_through": deadline_value, "application_due": job.get("deadline_text"), "employer_name": job.get("employer"), "found_on": found_on.fetched.final_url, "company_named_on_page": proof})
+        if published:
+            ledger.withheld = [record for record in ledger.withheld if not (record["field"] in ("hiring.career_page", "hiring.recruitment_portal") and (record.get("url") or "").split("#")[0] in published)]
+
     def _site_labels(self, home: Page, brand: str | None, domain: str) -> set[str]:
         labels = {_norm(home.title), _norm(home.site_name), _norm(brand), domain_label(domain)}
         anchors = {domain_label(domain)} | ({re.sub(r"[^a-z0-9æøå]", "", _norm(brand))} if brand else set())
@@ -1500,7 +1745,7 @@ class WebsiteResearcher:
         return {label for label in labels if label}
 
     def _news_candidate_rejection(self, item: dict[str, Any], domain: str, labels: set[str]) -> str | None:
-        rule = news_url_rejection(item["url"], domain, item.get("page"))
+        rule = news_url_rejection(item["url"], item.get("domain") or domain, item.get("page"))
         if rule:
             return rule
         rule = news_title_rejection(item["title"], labels) or news_category_rejection(item.get("categories"))
@@ -1548,6 +1793,14 @@ class WebsiteResearcher:
                 for entry in entries:
                     date_value = entry.get("date") or extract.url_date(entry["url"])
                     candidates.append({"url": entry["url"], "title": entry["title"], "date": date_value, "date_source": entry.get("date_source") or ("date in URL" if date_value else None), "fetched": fetched, "page": None, "method": "rss_feed", "locator": entry.get("date_source") or "feed item", "bulk": bool(entry.get("date") and entry["date"] in bulk and not extract.url_date(entry["url"])), "modified": entry.get("modified"), "categories": entry.get("categories") or []})
+        if allow_feeds:
+            open_deadline = max(deadline, time.monotonic() + NEWS_CHECK_SECONDS)
+            if ctx.deadline:
+                open_deadline = min(open_deadline, ctx.deadline)
+            known = {extract.clean_url(item["url"]) for item in candidates}
+            linked = [item for item in self._listing_news_candidates(pages, home, domain) if item["url"] not in known]
+            linked += [item for item in self._press_release_candidates(pages) if item["url"] not in known]
+            candidates.extend(await self._open_linked_news(ctx, linked, open_deadline))
         accepted = self._accept_news(ctx, candidates, domain, labels, horizon)
         if allow_feeds and len(accepted) < 3 and time.monotonic() < deadline:
             extra: list[dict[str, Any]] = []
@@ -1575,15 +1828,89 @@ class WebsiteResearcher:
             if page is None:
                 ledger.withhold("news_page_not_checked", "activity.website_news", item["title"], url=url, fetched=item["fetched"], detail=item.get("page_error") or "item page could not be opened")
                 continue
-            rule = news_page_rejection(page, url, domain, item["method"] == "rss_feed")
+            press = item["method"] == "press_release"
+            rule = news_page_rejection(page, url, item.get("domain") or domain, item["method"] in ("rss_feed", "news_listing"))
             if rule:
                 ledger.withhold(rule, "activity.website_news", item["title"], url=url, fetched=page.fetched, detail=article_detail(page), found_in=item["fetched"].final_url)
                 continue
-            evidence = [ledger.evidence_for(item["fetched"], source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator=item["locator"], span=f"{item['date']} {item['title']}", method=item["method"])]
-            if page.fetched is not item["fetched"]:
-                evidence.append(ledger.evidence_for(page.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="article page", span=page.title or item["title"], method="article_page_check"))
+            proof = company_named_on(ctx, page, head_only=press, with_brand=not press)
+            if press and not employer_is_company(ctx, press_publisher(item["platform"], url, page)):
+                proof = None
+            if not proof:
+                ledger.withhold("news_page_does_not_name_company", "activity.website_news", item["title"], url=url, fetched=page.fetched, detail="the article page shows neither the company's name nor its organisation number" if not press else "the press release is not published under the company's name", found_in=item["fetched"].final_url)
+                continue
+            page_source = item.get("platform") or SITE_SOURCE
+            page_class = "press_release_platform" if press else "company_owned"
+            page_licence = "press_release_platform" if press else "company_site"
+            if item["method"] in ("news_listing", "press_release"):
+                if item.get("date_on_page"):
+                    evidence = [ledger.evidence_for(page.fetched, source_name=page_source, source_class=page_class, licence_key=page_licence, locator=item["date_source"], span=f"{item['date']} {page.title or item['title']}", method="article_metadata")]
+                else:
+                    evidence = [ledger.evidence_for(item["fetched"], source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="date beside the link on the news listing", span=item.get("card") or item["title"], method="news_listing"), ledger.evidence_for(page.fetched, source_name=page_source, source_class=page_class, licence_key=page_licence, locator="article page", span=page.title or item["title"], method="article_page_check")]
+                evidence.append(ledger.evidence_for(item["fetched"], source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator=item["locator"], span=item.get("link_text") or url, method="link_from_verified_site"))
+            else:
+                evidence = [ledger.evidence_for(item["fetched"], source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator=item["locator"], span=f"{item['date']} {item['title']}", method=item["method"])]
+                if page.fetched is not item["fetched"]:
+                    evidence.append(ledger.evidence_for(page.fetched, source_name=SITE_SOURCE, source_class="company_owned", licence_key="company_site", locator="article page", span=page.title or item["title"], method="article_page_check"))
+            evidence.append(ledger.evidence_for(page.fetched, source_name=page_source, source_class=page_class, licence_key=page_licence, locator="text", span=proof, method="company_named_on_page"))
             check = {key: (page.article or {}).get(key) for key in ("prose_words", "prices", "article_markup", "og_type")}
-            ledger.claim("public_activity", "activity.website_news", item["title"][:240], evidence, key=f"activity.website_news.{url}", label="Dated article on verified company website", method=item["method"], as_of=item["date"], confidence=0.9, extra={"url": url, "published": item["date"], "date_source": item.get("date_source"), "article_check": check})
+            extra = {"url": url, "published": item["date"], "date_source": item.get("date_source"), "article_check": check, "company_named_on_page": proof}
+            if item["method"] in ("news_listing", "press_release"):
+                extra["found_on"] = item["fetched"].final_url
+            if press:
+                extra["source_system"] = item["platform"]
+            label = f"Dated press release on {item['platform']}, linked from the verified website" if press else "Dated article on verified company website"
+            ledger.claim("public_activity", "activity.website_news", item["title"][:240], evidence, key=f"activity.website_news.{url}", label=label, method=item["method"], as_of=item["date"], confidence=0.9, extra=extra)
+
+    def _listing_news_candidates(self, pages: list[Page], home: Page, domain: str) -> list[dict[str, Any]]:
+        listings = [page for page in pages if page is not home and NEWS_PATH.search(urlsplit(page.fetched.final_url).path) and news_url_rejection(page.fetched.final_url, domain) == "news_not_a_post_url"]
+        home_links = {extract.clean_url(url) for url, _ in home.links}
+        items: dict[str, dict[str, Any]] = {}
+        for page in listings + [home]:
+            base = urlsplit(page.fetched.final_url).path.rstrip("/")
+            own_url = extract.clean_url(page.fetched.final_url)
+            for url, text in page.links:
+                clean = extract.clean_url(url)
+                parts = urlsplit(clean)
+                if clean in items or clean == own_url or parts.query or registered_domain(parts.hostname or "") != domain:
+                    continue
+                if news_url_rejection(clean, domain):
+                    continue
+                card = page.link_dates.get(url)
+                under = page is not home and base not in ("", "/") and parts.path.rstrip("/").startswith(base + "/")
+                if not (under or NEWS_PATH.search(parts.path) or extract.url_date(clean) or (page is not home and card and clean not in home_links)):
+                    continue
+                items[clean] = {"url": clean, "title": text, "link_text": text, "date": card[0] if card else None, "date_source": "date beside the link on the news listing" if card else None, "card": card[1] if card else None, "fetched": page.fetched, "page": None, "method": "news_listing", "locator": "link on news listing" if page is not home else "link on homepage"}
+        return sorted(items.values(), key=lambda item: item["date"] or "", reverse=True)
+
+    def _press_release_candidates(self, pages: list[Page]) -> list[dict[str, Any]]:
+        items: dict[str, dict[str, Any]] = {}
+        for page in pages:
+            for url, text in page.links:
+                clean = url.split("#")[0]
+                platform = platform_of(clean, PRESS_RELEASES)
+                if platform and clean not in items:
+                    items[clean] = {"url": clean, "title": text, "link_text": text, "date": None, "date_source": None, "fetched": page.fetched, "page": None, "method": "press_release", "locator": "link on verified website", "platform": platform, "domain": registered_domain(urlsplit(clean).hostname or "")}
+        return list(items.values())[:PRESS_OPEN_LIMIT]
+
+    async def _open_linked_news(self, ctx: CompanyContext, items: list[dict[str, Any]], deadline: float) -> list[dict[str, Any]]:
+        listing = [item for item in items if item["method"] == "news_listing"]
+        press = [item for item in items if item["method"] == "press_release"]
+        for item in listing[LISTING_OPEN_LIMIT:]:
+            ctx.ledger.withhold("news_over_check_limit", "activity.website_news", item["title"], url=item["url"], fetched=item["fetched"], detail=f"only the first {LISTING_OPEN_LIMIT} items linked from the news listing are opened and checked")
+        queue = listing[:LISTING_OPEN_LIMIT] + press
+        await self._load_news_pages(queue, deadline)
+        for item in queue:
+            page = item.get("page")
+            if page is None:
+                continue
+            if page.title:
+                item["title"] = page.title
+            if page.published:
+                item.update(date=page.published, date_source=page.published_source, date_on_page=True)
+                if item["method"] == "press_release":
+                    item["locator"] = "link on verified website"
+        return queue
 
     async def _load_news_pages(self, items: list[dict[str, Any]], deadline: float) -> None:
         semaphore = asyncio.Semaphore(3)

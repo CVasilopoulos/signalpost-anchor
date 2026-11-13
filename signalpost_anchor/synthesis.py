@@ -250,16 +250,137 @@ def build_synthesis(ctx: CompanyContext, changes: list[dict[str, Any]] | None = 
     unknowns = _unknowns(ctx)
     if unknowns:
         add("unknowns", "Not established: " + "; ".join(_unknown_text(item) for item in unknowns) + ".", [])
+    sentences = _summary_sentences(ctx, name, years, unknowns, highlights, (whats_new or {}).get("previous_completed_at"))
+    if sentences:
+        paragraphs.insert(0, {"topic": "summary", "text": " ".join(item["text"] for item in sentences), "claim_ids": [cid for item in sentences for cid in item["claim_ids"] if cid]})
     for paragraph in paragraphs:
         paragraph["sources"] = _sources(ctx, paragraph["claim_ids"])
-    summary = " ".join(paragraph["text"] for paragraph in paragraphs if paragraph["topic"] in ("what_it_does", "key_points", "leadership"))
+    for item in sentences:
+        item["sources"] = _sources(ctx, item["claim_ids"])
+    summary = " ".join(item["text"] for item in sentences)
     return {
         "summary": summary,
+        "summary_sentences": sentences,
         "paragraphs": paragraphs,
         "signals": signals,
         "unknowns": unknowns,
         "method": "deterministic template over published claims (no language model); every sentence lists the claim ids it rests on",
     }
+
+
+def _years_span(years: list[str]) -> str:
+    ordered = sorted(years)
+    return ordered[0] if len(ordered) == 1 else f"{ordered[0]}–{ordered[-1]}"
+
+
+def _result_word(value: float) -> str:
+    return "profit" if value >= 0 else "loss"
+
+
+def _lead_sentence(ctx: CompanyContext, name: str, years: list[str]) -> dict[str, Any] | None:
+    if ctx.entity_status in ("bankrupt", "liquidating", "forced_dissolution", "deleted"):
+        status = _claims(ctx, "identity.status")
+        when = (status[0].get("as_of") or "") if status else ""
+        return {"kind": "status", "text": f"{name} {STATUS_TEXT[ctx.entity_status]}{f' since {when}' if when else ''} (Enhetsregisteret).", "claim_ids": [claim["id"] for claim in status]}
+    if years:
+        filed = sorted(years)[-3:]
+        revenues = [(year, _financial(ctx, "financials.revenue", year)) for year in filed]
+        revenues = [(year, claim) for year, claim in revenues if claim is not None]
+        latest = filed[-1]
+        result = _financial(ctx, "financials.annual_result", latest)
+        ids = [claim["id"] for _, claim in revenues] + ([result["id"]] if result else [])
+        source = f"(Regnskapsregisteret, filed accounts {_years_span([year for year, _ in revenues] or [latest])})"
+        if len(revenues) >= 2 and revenues[-1][1]["value"] and revenues[-2][1]["value"]:
+            last_year, last = revenues[-1]
+            prev_year, prev = revenues[-2]
+            change = (last["value"] - prev["value"]) / abs(prev["value"]) * 100
+            trend = " → ".join(f"{money(claim['value'], claim.get('unit', 'NOK'))} ({year})" for year, claim in revenues)
+            verb = "grew" if change >= 0 else "fell"
+            text = f"Revenue {verb} {abs(change):.0f}% in {last_year}: {trend}"
+            if result:
+                text += f", and {latest} closed with a {_result_word(result['value'])} of {money(abs(result['value']), result.get('unit', 'NOK'))}"
+            return {"kind": "financials", "text": f"{text} {source}.", "claim_ids": ids}
+        if revenues and revenues[-1][1]["value"]:
+            year, claim = revenues[-1]
+            text = f"Revenue was {money(claim['value'], claim.get('unit', 'NOK'))} in {year}"
+            if result:
+                text += f", with a {_result_word(result['value'])} of {money(abs(result['value']), result.get('unit', 'NOK'))}"
+            return {"kind": "financials", "text": f"{text} {source}.", "claim_ids": ids}
+        results = [(year, _financial(ctx, "financials.annual_result", year)) for year in filed]
+        results = [(year, claim) for year, claim in results if claim is not None]
+        if results:
+            trend = " → ".join(f"{money(claim['value'], claim.get('unit', 'NOK'))} ({year})" for year, claim in results)
+            opening = f"Operating revenue was NOK 0 in {revenues[-1][0]}" if revenues else "No operating revenue is reported"
+            return {"kind": "financials", "text": f"{opening}; the annual result was {trend} (Regnskapsregisteret, filed accounts {_years_span([year for year, _ in results])}).", "claim_ids": [claim["id"] for _, claim in results] + [claim["id"] for _, claim in revenues[-1:]]}
+    jobs = sorted(_claims(ctx, "hiring.job_posting"), key=lambda claim: str(claim.get("date_posted") or claim.get("as_of") or ""), reverse=True)
+    if jobs:
+        systems = sorted({str(claim.get("source_system") or "the company website").replace("company_website", "the company website") for claim in jobs})
+        latest = jobs[0].get("date_posted") or jobs[0].get("as_of")
+        return {"kind": "hiring", "text": f"It is hiring now: {len(jobs)} open job posting{'s' if len(jobs) != 1 else ''}, e.g. “{jobs[0]['value'][:80]}”{f', posted {latest}' if latest else ''} ({', '.join(systems)}).", "claim_ids": [claim["id"] for claim in jobs]}
+    news = sorted(_claims(ctx, "activity.website_news"), key=lambda claim: claim.get("as_of") or "", reverse=True)
+    if news:
+        return {"kind": "news", "text": f"Latest public news: “{news[0]['value'][:100]}” ({news[0].get('as_of')}, {news[0].get('url') or 'company website'}).", "claim_ids": [news[0]["id"]]}
+    employees = _claims(ctx, "identity.employees")
+    if employees:
+        return {"kind": "headcount", "text": f"It has {employees[0]['value']} registered employees (Aa-registeret via Enhetsregisteret, {employees[0].get('as_of') or 'latest update'}).", "claim_ids": [employees[0]["id"]]}
+    return None
+
+
+def _business_sentence(ctx: CompanyContext) -> dict[str, Any] | None:
+    site = _claims(ctx, "website.description")
+    if site:
+        url = (_claims(ctx, "website.official_url") or [{}])[0].get("value") or "the verified website"
+        text = site[0]["value"]
+        return {"kind": "business", "text": f"In its own words: “{text[:180]}{'…' if len(text) > 180 else ''}” ({url}).", "claim_ids": [site[0]["id"]]}
+    nav = _claims(ctx, "identity.employer_self_description")
+    if nav:
+        text = nav[0]["value"]
+        return {"kind": "business", "text": f"In its own words: “{text[:180]}{'…' if len(text) > 180 else ''}” (employer text in its NAV job ad).", "claim_ids": [nav[0]["id"]]}
+    activity = _claims(ctx, "identity.registered_activity") or _claims(ctx, "identity.statutory_purpose")
+    if activity:
+        text = activity[0]["value"]
+        return {"kind": "business", "text": f"Registered activity: “{text[:160]}{'…' if len(text) > 160 else ''}” (Enhetsregisteret).", "claim_ids": [activity[0]["id"]]}
+    return None
+
+
+def _change_sentence(ctx: CompanyContext, lead_kind: str | None, highlights: list[dict[str, Any]], previous_at: str | None) -> dict[str, Any]:
+    if highlights:
+        when = str(previous_at or "")[:10]
+        return {"kind": "changed", "text": f"New since the previous run{f' ({when})' if when else ''}: " + "; ".join(item["headline"] for item in highlights[:3]) + (f"; and {len(highlights) - 3} more" if len(highlights) > 3 else "") + " (this run's sources against the previous run's evidence).", "claim_ids": [cid for item in highlights[:3] for cid in item["claim_ids"]]}
+    bits: list[str] = []
+    ids: list[str] = []
+    horizon = (date.today() - timedelta(days=730)).isoformat()
+    registry = sorted((claim for claim in ctx.ledger.claims if claim["field"].startswith("activity.registry_") and claim["field"] not in ("activity.registry_employee_count", "activity.registry_accounts_filed") and (claim.get("as_of") or "") >= horizon), key=lambda claim: claim.get("as_of") or "", reverse=True)
+    if registry:
+        bits.append("; ".join(f"{claim['value']} ({(claim.get('as_of') or '')[:10]})" for claim in registry[:2]) + " (Enhetsregisteret)")
+        ids += [claim["id"] for claim in registry[:2]]
+    news = sorted(_claims(ctx, "activity.website_news"), key=lambda claim: claim.get("as_of") or "", reverse=True)
+    if news and lead_kind != "news":
+        bits.append(f"latest dated post “{news[0]['value'][:80]}” ({news[0].get('as_of')}, {news[0].get('url') or 'company website'})")
+        ids.append(news[0]["id"])
+    jobs = sorted(_claims(ctx, "hiring.job_posting"), key=lambda claim: str(claim.get("date_posted") or claim.get("as_of") or ""), reverse=True)
+    if jobs and lead_kind != "hiring":
+        latest = jobs[0].get("date_posted") or jobs[0].get("as_of")
+        systems = sorted({str(claim.get("source_system") or "company website").replace("company_website", "company website") for claim in jobs})
+        bits.append(f"{len(jobs)} open job posting{'s' if len(jobs) != 1 else ''}{f', latest posted {latest}' if latest else ''} ({', '.join(systems)})")
+        ids += [claim["id"] for claim in jobs]
+    if not bits:
+        checked = ["Enhetsregisteret update feed"] + (["NAV job feed"] if "nav" in ctx.ledger.checked_sources else []) + (["verified website"] if ctx.website else [])
+        return {"kind": "changed", "text": f"What changed: no registry change in the last two years and no dated news or open job posting was found ({', '.join(checked)}).", "claim_ids": []}
+    return {"kind": "changed", "text": "What changed: " + "; ".join(bits) + ".", "claim_ids": ids}
+
+
+def _unknown_sentence(unknowns: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not unknowns:
+        return None
+    labels = [f"{item['label'].lower()} ({item['state'].replace('_', ' ')})" for item in unknowns[:6]]
+    return {"kind": "unknown", "text": "Not established: " + "; ".join(labels) + " (each section records the sources that were checked).", "claim_ids": []}
+
+
+def _summary_sentences(ctx: CompanyContext, name: str, years: list[str], unknowns: list[dict[str, Any]], highlights: list[dict[str, Any]], previous_at: str | None) -> list[dict[str, Any]]:
+    lead = _lead_sentence(ctx, name, years)
+    sentences = [item for item in (lead, _business_sentence(ctx), _change_sentence(ctx, lead["kind"] if lead else None, highlights, previous_at), _unknown_sentence(unknowns)) if item]
+    return sentences
 
 
 def _unknown_text(item: dict[str, Any]) -> str:

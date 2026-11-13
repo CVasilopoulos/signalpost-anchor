@@ -34,6 +34,16 @@ Outputs in `<OUTPUT_DIR>`:
 | `history/` | previous `envelopes.jsonl` files archived on refresh; together with each envelope's `history` and change records this keeps the previous run's evidence |
 | `withheld.jsonl` | items that were found but not published, one per line with the rule that withheld them, the page URL and the content hash of the cached page (for example a footer link to the web agency's Facebook page, a news menu label, a careers landing page); counts per rule are in `run-report.json` under `withheld` |
 
+### Browse a run
+
+`run` writes the browsable site to `<OUTPUT_DIR>/site/index.html`. To build it again from any run's envelopes (for example from the published smoke test), one command:
+
+```bash
+python -m signalpost_anchor site --envelopes <OUTPUT_DIR>/envelopes.jsonl --report <OUTPUT_DIR>/run-report.json --output <OUTPUT_DIR>/site
+```
+
+Then open `<OUTPUT_DIR>/site/index.html` in a browser. It needs no server and no network, so the same folder can also be served as static files (for example by GitHub Pages).
+
 Run the same command again on the same output directory (or pass `--previous <earlier envelopes.jsonl>`) to refresh: changes are reported per claim, unchanged sources produce no changes, failed sources keep the last supported value marked stale, and every envelope gets a `whats_new` list (what is new since the previous run and why it matters, plus the latest movements in this run's evidence) that the site shows on each profile and summarises on the run page ([docs/REFRESH.md](docs/REFRESH.md)).
 
 ### Budget controls
