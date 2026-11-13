@@ -2,16 +2,16 @@
   "report_version": "signalpost-anchor-run-report/1.0",
   "agent": {
     "name": "Signalpost Anchor",
-    "version": "1.4.0"
+    "version": "1.5.0"
   },
   "run": {
-    "run_id": "run-20261101T210138",
-    "started_at": "2026-11-01T21:01:38.286Z",
-    "completed_at": "2026-11-01T21:03:33.921Z",
+    "run_id": "c2-random",
+    "started_at": "2026-11-13T15:21:37.880Z",
+    "completed_at": "2026-11-13T15:24:52.441Z",
     "terminal_status": "completed",
     "agent": "Signalpost Anchor",
-    "agent_version": "1.4.0",
-    "evidence_cutoff": "2026-11-01T21:03:33.921Z"
+    "agent_version": "1.5.0",
+    "evidence_cutoff": "2026-11-13T15:24:52.441Z"
   },
   "environment": {
     "python": "3.12.15",
@@ -67,17 +67,17 @@
       "not_available": 1
     },
     "website": {
-      "not_available": 83,
+      "not_available": 84,
       "ambiguous": 3,
-      "available": 13,
-      "blocked": 1
+      "available": 13
     },
     "company_profiles": {
       "not_available": 93,
       "available": 7
     },
     "hiring": {
-      "not_available": 100
+      "not_available": 98,
+      "available": 2
     },
     "public_activity": {
       "available": 100
@@ -97,8 +97,8 @@
     "registered_workplaces": 70,
     "verified_website": 13,
     "company_profiles": 7,
-    "hiring_any": 0,
-    "job_postings": 0,
+    "hiring_any": 2,
+    "job_postings": 2,
     "website_news": 1,
     "registry_activity": 99,
     "contact": 42,
@@ -113,8 +113,8 @@
     "registered_workplaces": 0.7,
     "verified_website": 0.13,
     "company_profiles": 0.07,
-    "hiring_any": 0.0,
-    "job_postings": 0.0,
+    "hiring_any": 0.02,
+    "job_postings": 0.02,
     "website_news": 0.01,
     "registry_activity": 0.99,
     "contact": 0.42,
@@ -123,10 +123,10 @@
     "public_brand": 0.12
   },
   "claims": {
-    "total": 10831,
-    "per_company_mean": 108.3,
+    "total": 11179,
+    "per_company_mean": 111.8,
     "by_field": {
-      "financials.filed_copy": 444,
+      "financials.filed_copy": 750,
       "financials.annual_result": 284,
       "financials.total_assets": 284,
       "financials.equity": 284,
@@ -182,12 +182,12 @@
       "leadership.board_member": 96,
       "identity.statutory_purpose": 95,
       "location.registered_workplace": 93,
+      "financials.filed_copy_years": 91,
       "identity.share_capital": 89,
       "identity.number_of_shares": 86,
-      "leadership.accountant": 68,
-      "activity.registry_employee_count": 63,
+      "leadership.accountant": 67,
+      "activity.registry_employee_count": 67,
       "financials.inventory": 55,
-      "financials.filed_copy_years": 54,
       "leadership.ceo": 49,
       "activity.registry_event": 48,
       "identity.vat_registered_date": 39,
@@ -209,49 +209,51 @@
       "website.title": 13,
       "website.language": 13,
       "identity.public_brand": 12,
-      "contact.website_phone": 12,
       "activity.registry_industry_change": 11,
       "activity.registry_articles_updated": 11,
       "activity.registry_address_change": 10,
       "identity.employees": 10,
+      "contact.website_phone": 10,
       "identity.auxiliary_unit_code": 9,
-      "website.description": 9,
       "leadership.business_manager": 8,
       "website.registry_listed": 8,
-      "location.website_address": 8,
+      "website.description": 8,
       "contact.website_email": 7,
+      "location.website_address": 7,
       "activity.registry_capital_change": 7,
+      "group.size": 6,
       "identity.voluntary_vat_registered_date": 6,
       "identity.voluntary_vat_basis": 6,
       "profile.facebook": 6,
-      "group.size": 5,
+      "group.subsidiary": 5,
       "financials.goodwill": 5,
-      "leadership.named_on_website": 4,
+      "profile.instagram": 4,
       "group.ultimate_parent": 4,
       "group.parent": 4,
-      "website.about_description": 4,
-      "group.subsidiary": 3,
       "activity.registry_postal_address_change": 3,
-      "profile.instagram": 3,
+      "website.logo": 3,
+      "leadership.named_on_website": 3,
+      "website.about_description": 3,
+      "hiring.job_posting": 2,
       "activity.registry_vat_status_change": 2,
       "leadership.owner": 2,
       "activity.registry_name_change": 2,
       "identity.website_founded_year": 2,
-      "website.logo": 2,
       "location.opening_hours": 2,
+      "identity.employer_self_description": 1,
+      "hiring.active_job_ads_nav": 1,
       "activity.registry_email_change": 1,
       "activity.registry_liquidation": 1,
       "activity.website_news": 1,
-      "profile.linkedin": 1,
       "identity.deleted_date": 1
     }
   },
   "website_verification_methods": {
     "registry_email_domain_and_name_match": 2,
-    "organisation_number_on_site": 3,
+    "organisation_number_on_site": 5,
     "name_derived_domain_with_exact_legal_name": 3,
     "registry_listed_and_name_match": 2,
-    "name_derived_domain_with_name_and_contact_match": 3
+    "name_derived_domain_with_name_and_contact_match": 1
   },
   "changes": {
     "total": 0,
@@ -266,8 +268,8 @@
     "latest_movements_by_kind": {
       "revenue_move": 56,
       "result_turned": 31,
-      "recent_registry_event": 19,
-      "recent_article": 1
+      "recent_registry_event": 11,
+      "recent_job": 1
     },
     "items": []
   },
@@ -275,16 +277,16 @@
     "enabled": true,
     "state": "complete",
     "token_source": "NAV published public token (api/publicToken)",
-    "pages_read": 353,
+    "pages_read": 352,
     "segments": 16,
     "lookback_days": 180,
-    "newest_change_seen": "2026-11-01T21:49:10.262655+01:00",
-    "ads_indexed": 86450,
-    "active_ads_indexed": 9337,
+    "newest_change_seen": "2026-11-13T16:19:19.609418+01:00",
+    "ads_indexed": 86568,
+    "active_ads_indexed": 10161,
     "error": null,
-    "candidates": 27,
-    "verified": 0,
-    "rejected_orgnr_mismatch": 27,
+    "candidates": 13,
+    "verified": 1,
+    "rejected_orgnr_mismatch": 12,
     "inactive": 0,
     "errors": 0,
     "second_pass_companies": 0,
@@ -296,55 +298,51 @@
     "errors": []
   },
   "operations": {
-    "requests": 1492,
-    "bytes_received": 205176581,
-    "request_p50_ms": 430,
-    "request_p95_ms": 1449,
+    "requests": 1405,
+    "bytes_received": 191324695,
+    "request_p50_ms": 343,
+    "request_p95_ms": 1692,
     "top_hosts": {
-      "data.brreg.no": 559,
-      "pam-stilling-feed.nav.no": 381,
+      "data.brreg.no": 597,
+      "pam-stilling-feed.nav.no": 366,
+      "www.gausdalelektro.no": 21,
       "www.mntannlegeklinikk.no": 14,
-      "www.gausdalelektro.no": 11,
-      "feminin-fysikk.no": 10,
+      "feminin-fysikk.no": 13,
       "www.sundmed.se": 8,
+      "microkaffi.com": 8,
       "pmfirst.no": 7,
-      "svetek.com": 7,
       "www.hunkemoller.no": 7,
       "www.hamangtrafikkskole.no": 7,
-      "www.hunkemoller.com": 7,
+      "vestrepark.no": 7,
       "www.aperitif.no": 6
     },
     "transport_errors": {
-      "ConnectError": 37,
-      "ConnectTimeout": 23
+      "ConnectError": 25,
+      "ConnectTimeout": 13
     },
-    "runtime_s": 115.8,
-    "company_runtime_p50_ms": 5391.896140761673,
-    "company_runtime_p95_ms": 26247.931144200265,
+    "runtime_s": 194.7,
+    "company_runtime_p50_ms": 30968.19312311709,
+    "company_runtime_p95_ms": 46210.14757081866,
     "third_party_cost_usd": 0.0,
     "llm_calls": 0,
     "paid_apis": []
   },
   "filing_copy_years": {
-    "companies_checked": 54,
+    "companies_checked": 91,
     "skipped_no_accounts": 0,
     "rate_limited": 0,
     "stopped_at_time_budget": true,
-    "pending": 46
+    "pending": 9
   },
   "withheld": {
-    "total": 35,
+    "total": 38,
     "companies": 9,
     "by_rule": {
-      "job_employer_not_company": 27,
-      "news_not_a_post_url": 4,
-      "job_careers_landing_page": 3,
-      "news_no_publish_date": 1
+      "news_no_publish_date": 13,
+      "job_employer_not_company": 12,
+      "news_over_check_limit": 8,
+      "news_not_a_post_url": 3,
+      "job_careers_landing_page": 2
     }
-  },
-  "site": {
-    "index": "site/index.html",
-    "companies": 100,
-    "how_to_open": "open site/index.html in any browser, from the file system, on desktop or mobile; no server or network needed"
   }
 }
